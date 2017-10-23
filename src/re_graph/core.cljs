@@ -10,20 +10,21 @@
    {::send-http [(get-in db [:re-graph :http-url])
                  {:payload {:query (str "query " query)
                             :variables variables}}
-                 callback-event]}))
+                 (fn [payload]
+                   (re-frame/dispatch (conj callback-event (:data payload))))]}))
 
 (re-frame/reg-fx
  ::send-http
- (fn [[http-url {:keys [payload]} callback-event]]
+ (fn [[http-url {:keys [payload]} callback-fn]]
    (go (let [response (a/<! (http/post http-url {:json-params payload}))]
-         (re-frame/dispatch (conj callback-event (get-in response [:body :data])))))))
+         (callback-fn (:body response))))))
 
 (re-frame/reg-event-fx
  ::subscribe
  (fn [{:keys [db]} [_ subscription-id query variables callback-event]]
    {:db (assoc-in db [:re-graph :subscriptions (name subscription-id)] {:callback callback-event})
     ::send-ws [(get-in db [:re-graph :websocket])
-               {:id subscription-id
+               {:id (name subscription-id)
                 :type "start"
                 :payload {:query (str "subscription " query)
                           :variables variables}}]}))
@@ -37,7 +38,8 @@
  ::on-ws-data
  (fn [{:keys [db]} [_ subscription-id payload]]
    (if-let [callback-event (get-in db [:re-graph :subscriptions (name subscription-id) :callback])]
-     {:dispatch (conj callback-event (:data payload))}
+     {:db db
+      :dispatch (conj callback-event (:data payload))}
      (js/console.debug "No callback-event found for subscription" subscription-id))))
 
 (defn- on-ws-message [m]
@@ -54,7 +56,7 @@
 
 (re-frame/reg-event-db
  ::init
- (fn [{:keys [db]} [_ {:keys [ws-url http-url]}]]
+ (fn [db [_ {:keys [ws-url http-url]}]]
    (let [ws-url (or ws-url (default-ws-url))
          ws (js/WebSocket. ws-url "graphql-ws")]
 

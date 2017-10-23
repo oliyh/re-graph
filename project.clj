@@ -11,7 +11,7 @@
                   ["change" "version" "leiningen.release/bump-version"]
                   ["vcs" "commit"]
                   ["vcs" "push"]]
-  :dependencies [[re-frame "0.8.0"]
+  :dependencies [[re-frame "0.10.2"]
                  [cljs-http "0.1.43"]]
   :plugins [[lein-cljsbuild "1.1.7"]
             [lein-doo "0.1.8"]
@@ -26,7 +26,7 @@
                                   [figwheel-sidecar "0.5.14"]
                                   [binaryage/devtools "0.8.3"]
                                   [devcards "0.2.2"]
-                                  [day8.re-frame/test "0.1.3"]
+                                  [day8.re-frame/test "0.1.5"]
                                   [lein-doo "0.1.6"]
 
                                   ;; gh-pages deploy
