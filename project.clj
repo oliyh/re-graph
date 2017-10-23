@@ -41,7 +41,8 @@
   :cljsbuild {:builds [{:id "devcards"
                         :figwheel {:devcards true}
                         :source-paths ["src" "test"]
-                        :compiler {:main "re-graph.all-tests"
+                        :compiler {:preloads [devtools.preload]
+                                   :main "re-graph.all-tests"
                                    :asset-path "js/devcards"
                                    :output-to "dev-resources/public/devcards/js/devcards.js"
                                    :output-dir "dev-resources/public/devcards/js/devcards"
@@ -50,7 +51,7 @@
 
                        {:id "test"
                         :source-paths ["src" "test"]
-                        :compiler {:output-to "out/unit-test.js"
+                        :compiler {:output-to "target/unit-test.js"
                                    :main "re-graph.runner"
                                    :optimizations :whitespace
                                    :parallel-build true}}]})
