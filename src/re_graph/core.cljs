@@ -29,6 +29,14 @@
                 :payload {:query (str "subscription " query)
                           :variables variables}}]}))
 
+(re-frame/reg-event-fx
+ ::unsubscribe
+ (fn [{:keys [db]} [_ subscription-id]]
+   {:db (update-in db [:re-graph :subscriptions] dissoc (name subscription-id))
+    ::send-ws [(get-in db [:re-graph :websocket])
+               {:id (name subscription-id)
+                :type "stop"}]}))
+
 (re-frame/reg-fx
  ::send-ws
  (fn [[websocket payload]]

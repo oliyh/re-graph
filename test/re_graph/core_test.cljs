@@ -14,7 +14,9 @@
    (let [expected-subscription-payload {:id "my-sub"
                                         :type "start"
                                         :payload {:query "subscription { things { id } }"
-                                                  :variables {:some "variable"}}}]
+                                                  :variables {:some "variable"}}}
+         expected-unsubscription-payload {:id "my-sub"
+                                          :type "stop"}]
 
      (testing "Subscriptions can be registered"
 
@@ -43,7 +45,18 @@
                                                      :payload {:data expected-response-payload}}))}))
 
            (is (= expected-response-payload
-                  (::thing @app-db)))))))))
+                  (::thing @app-db)))))
+
+       (testing "and unregistered"
+         (re-frame/reg-fx
+          ::re-graph/send-ws
+          (fn [[_ payload]]
+            (is (= expected-unsubscription-payload
+                   payload))))
+
+         (re-frame/dispatch [::re-graph/unsubscribe :my-sub])
+
+         (is (nil? (get-in @app-db [:re-graph :subscriptions "my-sub"]))))))))
 
 (deftest http-query-test
   (run-test-sync
