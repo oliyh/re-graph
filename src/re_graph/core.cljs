@@ -21,7 +21,7 @@
 
 (re-frame/reg-event-fx
  ::subscribe
- (fn [{:keys [db]} [_ subscription-id query variables callback-event]]
+ (fn [{:keys [db]} [_ subscription-id query variables callback-event :as event]]
    (if (get-in db [:re-graph :websocket :ready?])
      {:db (assoc-in db [:re-graph :subscriptions (name subscription-id)] {:callback callback-event})
       ::send-ws [(get-in db [:re-graph :websocket :connection])
@@ -30,7 +30,7 @@
                   :payload {:query (str "subscription " query)
                             :variables variables}}]}
 
-     {:db (update-in db [:re-graph :websocket :queue] conj [::subscribe subscription-id query variables callback-event])})))
+     {:db (update-in db [:re-graph :websocket :queue] conj event)})))
 
 (re-frame/reg-event-fx
  ::unsubscribe
@@ -59,10 +59,12 @@
 (re-frame/reg-event-fx
  ::on-ws-open
  (fn [{:keys [db]}]
-   {:db (-> db
-            (assoc-in [:re-graph :websocket :ready?] true)
-            (assoc-in [:re-graph :websocket :queue] []))
-    :dispatch-n (get-in db [:re-graph :websocket :queue])}))
+   (merge
+    {:db (-> db
+             (assoc-in [:re-graph :websocket :ready?] true)
+             (assoc-in [:re-graph :websocket :queue] []))}
+    (when-let [queue (not-empty (get-in db [:re-graph :websocket :queue]))]
+      {:dispatch-n queue}))))
 
 (re-frame/reg-event-fx
  ::on-ws-close
