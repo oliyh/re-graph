@@ -22,20 +22,26 @@
 (re-frame/reg-event-fx
  ::subscribe
  (fn [{:keys [db]} [_ subscription-id query variables callback-event]]
-   {:db (assoc-in db [:re-graph :subscriptions (name subscription-id)] {:callback callback-event})
-    ::send-ws [(get-in db [:re-graph :websocket])
-               {:id (name subscription-id)
-                :type "start"
-                :payload {:query (str "subscription " query)
-                          :variables variables}}]}))
+   (if (get-in db [:re-graph :websocket :ready?])
+     {:db (assoc-in db [:re-graph :subscriptions (name subscription-id)] {:callback callback-event})
+      ::send-ws [(get-in db [:re-graph :websocket :connection])
+                 {:id (name subscription-id)
+                  :type "start"
+                  :payload {:query (str "subscription " query)
+                            :variables variables}}]}
+
+     {:db (update-in db [:re-graph :websocket :queue] conj [::subscribe subscription-id query variables callback-event])})))
 
 (re-frame/reg-event-fx
  ::unsubscribe
  (fn [{:keys [db]} [_ subscription-id]]
-   {:db (update-in db [:re-graph :subscriptions] dissoc (name subscription-id))
-    ::send-ws [(get-in db [:re-graph :websocket])
-               {:id (name subscription-id)
-                :type "stop"}]}))
+   (if (get-in db [:re-graph :websocket :ready?])
+     {:db (update-in db [:re-graph :subscriptions] dissoc (name subscription-id))
+      ::send-ws [(get-in db [:re-graph :websocket :connection])
+                 {:id (name subscription-id)
+                  :type "stop"}]}
+
+     {:db (update-in db [:re-graph :websocket :queue] conj [::unsubscribe subscription-id])})))
 
 (re-frame/reg-fx
  ::send-ws
@@ -50,6 +56,19 @@
       :dispatch (conj callback-event (:data payload))}
      (js/console.debug "No callback-event found for subscription" subscription-id))))
 
+(re-frame/reg-event-fx
+ ::on-ws-open
+ (fn [{:keys [db]}]
+   {:db (-> db
+            (assoc-in [:re-graph :websocket :ready?] true)
+            (assoc-in [:re-graph :websocket :queue] []))
+    :dispatch-n (list (get-in db [:re-graph :websocket :queue]))}))
+
+(re-frame/reg-event-fx
+ ::on-ws-close
+ (fn [{:keys [db]}]
+   {:db (assoc-in db [:re-graph :websocket :ready?] false)}))
+
 (defn- on-ws-message [m]
   (let [data (js/JSON.parse (.-data m))]
     (condp = (.-type data)
@@ -57,6 +76,12 @@
       (re-frame/dispatch [::on-ws-data (.-id data) (js->clj (.-payload data) :keywordize-keys true)])
 
       (js/console.debug "Ignoring graphql-ws event" (.-type data)))))
+
+(defn- on-open [e]
+  (re-frame/dispatch [::on-ws-open]))
+
+(defn- on-close [e]
+  (re-frame/dispatch [::on-ws-close]))
 
 (defn- default-ws-url []
   (let [host-and-port (.-host js/window.location)]
@@ -68,6 +93,10 @@
    (let [ws-url (or ws-url (default-ws-url))
          ws (js/WebSocket. ws-url "graphql-ws")]
 
-     (aset ws "on-message" on-ws-message)
-     (assoc-in db [:re-graph] {:websocket ws
-                               :http-url (or http-url "/graphql")}))))
+     (aset ws "onmessage" on-ws-message)
+     (aset ws "onopen" on-open)
+     (aset ws "onclose" on-close)
+     (assoc db :re-graph {:websocket {:connection ws
+                                      :ready? false
+                                      :queue []}
+                          :http-url (or http-url "/graphql")}))))

@@ -18,6 +18,8 @@
          expected-unsubscription-payload {:id "my-sub"
                                           :type "stop"}]
 
+     (re-frame/dispatch [::re-graph/on-ws-open])
+
      (testing "Subscriptions can be registered"
 
        (re-frame/reg-fx
@@ -57,6 +59,32 @@
          (re-frame/dispatch [::re-graph/unsubscribe :my-sub])
 
          (is (nil? (get-in @app-db [:re-graph :subscriptions "my-sub"]))))))))
+
+(deftest websocket-lifecycle-test
+  (run-test-sync
+
+   (let [expected-subscription-payload {:id "my-sub"
+                                        :type "start"
+                                        :payload {:query "subscription { things { id } }"
+                                                  :variables {:some "variable"}}}]
+
+     (testing "messages are queued when websocket isn't ready"
+
+       (re-frame/dispatch [::re-graph/subscribe :my-sub "{ things { id } }" {:some "variable"} [::on-thing]])
+
+       (is (= 1 (count (get-in @app-db [:re-graph :websocket :queue]))))
+
+       (testing "and sent when websocket opens"
+
+         (re-frame/reg-fx
+          ::re-graph/send-ws
+          (fn [[_ payload]]
+            (is (= expected-subscription-payload
+                   payload))))
+
+         (re-frame/dispatch [::re-graph/on-ws-open])
+
+         (is (empty? (get-in @app-db [:re-graph :websocket :queue]))))))))
 
 (deftest http-query-test
   (run-test-sync
