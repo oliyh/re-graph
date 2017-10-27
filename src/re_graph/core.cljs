@@ -62,7 +62,7 @@
    {:db (-> db
             (assoc-in [:re-graph :websocket :ready?] true)
             (assoc-in [:re-graph :websocket :queue] []))
-    :dispatch-n (list (get-in db [:re-graph :websocket :queue]))}))
+    :dispatch-n (get-in db [:re-graph :websocket :queue])}))
 
 (re-frame/reg-event-fx
  ::on-ws-close
