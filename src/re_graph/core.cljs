@@ -118,9 +118,11 @@
                             http-url "/graphql"
                             ws-reconnect-timeout 5000}}]]
 
-   {:db (assoc db :re-graph {:websocket {:url ws-url
-                                         :ready? false
-                                         :queue []
-                                         :reconnect-timeout ws-reconnect-timeout}
-                             :http-url http-url})
-    ::connect-ws [ws-url]}))
+   (merge
+    {:db (assoc db :re-graph {:websocket {:url ws-url
+                                          :ready? false
+                                          :queue []
+                                          :reconnect-timeout ws-reconnect-timeout}
+                              :http-url http-url})}
+    (when ws-url
+      {::connect-ws [ws-url]}))))
