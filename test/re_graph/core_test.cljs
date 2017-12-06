@@ -1,17 +1,18 @@
 (ns re-graph.core-test
   (:require [re-graph.core :as re-graph]
+            [re-graph.internals :as internals]
             [re-frame.core :as re-frame]
             [re-frame.db :refer [app-db]]
             [day8.re-frame.test :refer-macros [run-test-sync run-test-async wait-for]]
             [cljs.test :refer-macros [deftest is testing run-tests]]
             [devcards.core :refer-macros [deftest]]))
 
-(def on-ws-message @#'re-graph/on-ws-message)
-(def on-open @#'re-graph/on-open)
-(def on-close @#'re-graph/on-close)
+(def on-ws-message @#'internals/on-ws-message)
+(def on-open @#'internals/on-open)
+(def on-close @#'internals/on-close)
 
 (re-frame/reg-fx
- ::re-graph/connect-ws
+ ::internals/connect-ws
  (fn [& args]
    ((on-open ::websocket-connection))))
 
@@ -29,7 +30,7 @@
      (testing "Subscriptions can be registered"
 
        (re-frame/reg-fx
-        ::re-graph/send-ws
+        ::internals/send-ws
         (fn [[ws payload]]
           (is (= ::websocket-connection ws))
           (is (= expected-subscription-payload
@@ -58,7 +59,7 @@
 
        (testing "and unregistered"
          (re-frame/reg-fx
-          ::re-graph/send-ws
+          ::internals/send-ws
           (fn [[ws payload]]
             (is (= ::websocket-connection ws))
             (is (= expected-unsubscription-payload
@@ -72,7 +73,7 @@
   (run-test-sync
 
    (re-frame/reg-fx
-    ::re-graph/connect-ws
+    ::internals/connect-ws
     (constantly nil))
 
    (re-frame/dispatch [::re-graph/init])
@@ -91,7 +92,7 @@
        (testing "and sent when websocket opens"
 
          (re-frame/reg-fx
-          ::re-graph/send-ws
+          ::internals/send-ws
           (fn [[ws payload]]
             (is (= ::websocket-connection ws))
             (is (= expected-subscription-payload
@@ -107,15 +108,15 @@
      (re-frame/dispatch-sync [::re-graph/init {:ws-reconnect-timeout 1}])
 
      (wait-for
-      [::re-graph/on-ws-open]
+      [::internals/on-ws-open]
       (is (get-in @app-db [:re-graph :websocket :ready?]))
 
       (on-close)
       (wait-for
-       [::re-graph/on-ws-close]
+       [::internals/on-ws-close]
        (is (false? (get-in @app-db [:re-graph :websocket :ready?])))
 
-       (wait-for [::re-graph/on-ws-open]
+       (wait-for [::internals/on-ws-open]
                  (is (get-in @app-db [:re-graph :websocket :ready?]))))))))
 
 (deftest http-query-test
@@ -130,7 +131,7 @@
        (testing "Requests can be made"
 
          (re-frame/reg-fx
-          ::re-graph/send-http
+          ::internals/send-http
           (fn [[http-url {:keys [payload]} callback-fn]]
             (is (= expected-query-payload
                    payload))
