@@ -28,7 +28,8 @@
 (re-frame/reg-event-fx
  ::subscribe
  (fn [{:keys [db]} [_ subscription-id query variables callback-event :as event]]
-   (if (get-in db [:re-graph :websocket :ready?])
+   (cond
+     (get-in db [:re-graph :websocket :ready?])
      {:db (assoc-in db [:re-graph :subscriptions (name subscription-id)] {:callback callback-event})
       ::internals/send-ws [(get-in db [:re-graph :websocket :connection])
                            {:id (name subscription-id)
@@ -36,7 +37,11 @@
                             :payload {:query (str "subscription " query)
                                       :variables variables}}]}
 
-     {:db (update-in db [:re-graph :websocket :queue] conj event)})))
+     (get-in db [:re-graph :websocket])
+     {:db (update-in db [:re-graph :websocket :queue] conj event)}
+
+     :else
+     (js/console.error "Websocket is not enabled, subscriptions are not possible. Please check your re-graph configuration"))))
 
 (re-frame/reg-event-fx
  ::unsubscribe
