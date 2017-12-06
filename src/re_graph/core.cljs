@@ -86,8 +86,9 @@
   (re-frame/dispatch [::on-ws-close]))
 
 (defn- default-ws-url []
-  (let [host-and-port (.-host js/window.location)]
-    (str "ws://" host-and-port "/graphql-ws")))
+  (let [host-and-port (.-host js/window.location)
+        ssl? (re-find #"^https" (.-origin js/window.location))]
+    (str (if ssl? "wss" "ws") "://" host-and-port "/graphql-ws")))
 
 (re-frame/reg-event-db
  ::init
