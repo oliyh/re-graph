@@ -1,13 +1,13 @@
 # re-graph
 
-A graphql client for [re-frame](https://github.com/Day8/re-frame) applications
+re-graph is a graphql client for [re-frame](https://github.com/Day8/re-frame) applications.
 
 ## Notes
 
 This library behaves like the popular [Apollo client](https://github.com/apollographql/subscriptions-transport-ws)
 for graphql and as such is compatible with [lacinia-pedestal](https://github.com/walmartlabs/lacinia-pedestal).
 
-It supports HTTP and WebSockets (required for subscriptions).
+It supports HTTP and WebSockets (required for subscriptions), preferring WebSocket when available.
 
 ## Usage
 
@@ -41,7 +41,10 @@ Dispatch the `init` event to bootstrap it and then use the `:subscribe`, `:unsub
 (re-frame/dispatch [::re-graph/unsubscribe :my-subscription-id])
 
 ;; perform a query, with the response sent to the callback event provided
-(re-frame/dispatch [::re-graph/query "{ things { id } }" {:some "variable"} [::on-thing]])
+(re-frame/dispatch [::re-graph/query
+                    "{ things { id } }"  ;; your graphql query
+                    {:some "variable"}   ;; arguments map
+                    [::on-thing]])       ;; callback event when response is recieved
 ```
 
 ### Options
