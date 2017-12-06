@@ -12,26 +12,36 @@ It supports HTTP and WebSockets (required for subscriptions).
 ## Usage
 
 Add re-graph to your project's dependencies:
+
 [![Clojars Project](https://img.shields.io/clojars/v/re-graph.svg)](https://clojars.org/re-graph)
+
+Dispatch the `init` event to bootstrap it and then use the `:subscribe`, `:unsubscribe` and `:query` events:
 
 ```clojure
 (require [re-graph.core :as re-graph]
          [re-frame.core :as re-frame])
 
-(re-frame/dispatch [::re-graph/init])
+;; initialise re-graph, possibly including configuration options (see below)
+(re-frame/dispatch [::re-graph/init {}])
 
 (re-frame/reg-event-db
   ::on-thing
   (fn [db [_ payload]]
-    ;; do things with payload
+    ;; do things with payload e.g. write it into the re-frame database
     ))
 
+;; start a subscription, with responses sent to the callback event provided
 (re-frame/dispatch [::re-graph/subscribe
-                    :my-subscription-id
-                    "{ things { id } }"
-                    {}
-                    [::on-thing]])
+                    :my-subscription-id  ;; this id should uniquely identify this subscription
+                    "{ things { id } }"  ;; your graphql query
+                    {:some "variable"}   ;; arguments map
+                    [::on-thing]])       ;; callback event when messages are recieved
 
+;; stop the subscription
+(re-frame/dispatch [::re-graph/unsubscribe :my-subscription-id])
+
+;; perform a query, with the response sent to the callback event provided
+(re-frame/dispatch [::re-graph/query "{ things { id } }" {:some "variable"} [::on-thing]])
 ```
 
 ### Options
