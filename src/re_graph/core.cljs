@@ -4,12 +4,26 @@
 
 (re-frame/reg-event-fx
  ::query
- (fn [{:keys [db]} [_ query variables callback-event]]
-   {::internals/send-http [(get-in db [:re-graph :http-url])
-                           {:payload {:query (str "query " query)
-                                      :variables variables}}
-                           (fn [payload]
-                             (re-frame/dispatch (conj callback-event (:data payload))))]}))
+ (fn [{:keys [db]} [_ query variables callback-event :as event]]
+   (cond
+     (get-in db [:re-graph :websocket :ready?])
+     (let [query-id (internals/generate-query-id)]
+       {:db (assoc-in db [:re-graph :subscriptions query-id] {:callback callback-event})
+        ::internals/send-ws [(get-in db [:re-graph :websocket :connection])
+                             {:id query-id
+                              :type "start"
+                              :payload {:query (str "query " query)
+                                        :variables variables}}]})
+
+     (get-in db [:re-graph :websocket])
+     {:db (update-in db [:re-graph :websocket :queue] conj event)}
+
+     :else
+     {::internals/send-http [(get-in db [:re-graph :http-url])
+                             {:payload {:query (str "query " query)
+                                        :variables variables}}
+                             (fn [payload]
+                               (re-frame/dispatch (conj callback-event (:data payload))))]})))
 
 (re-frame/reg-event-fx
  ::subscribe
@@ -43,10 +57,13 @@
                             ws-reconnect-timeout 5000}}]]
 
    (merge
-    {:db (assoc db :re-graph {:websocket {:url ws-url
-                                          :ready? false
-                                          :queue []
-                                          :reconnect-timeout ws-reconnect-timeout}
-                              :http-url http-url})}
+    {:db (assoc db :re-graph (merge
+                              (when ws-url
+                                {:websocket {:url ws-url
+                                             :ready? false
+                                             :queue []
+                                             :reconnect-timeout ws-reconnect-timeout}})
+                              (when http-url
+                                {:http-url http-url})))}
     (when ws-url
       {::internals/connect-ws [ws-url]}))))

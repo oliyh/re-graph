@@ -119,16 +119,61 @@
        (wait-for [::internals/on-ws-open]
                  (is (get-in @app-db [:re-graph :websocket :ready?]))))))))
 
+(deftest websocket-query-test
+  (with-redefs [internals/generate-query-id (constantly "random-query-id")]
+    (run-test-sync
+     (re-frame/dispatch [::re-graph/init])
+
+     (let [expected-query-payload {:id "random-query-id"
+                                   :type "start"
+                                   :payload {:query "query { things { id } }"
+                                             :variables {:some "variable"}}}
+           expected-response-payload {:things [{:id 1} {:id 2}]}]
+
+       (testing "Queries can be made"
+
+         (re-frame/reg-fx
+          ::internals/send-ws
+          (fn [[ws payload]]
+            (is (= ::websocket-connection ws))
+
+            (is (= expected-query-payload
+                   payload))
+
+            (on-ws-message (clj->js {:data (js/JSON.stringify
+                                            (clj->js {:type "data"
+                                                      :id (:id payload)
+                                                      :payload {:data expected-response-payload}}))}))))
+
+         (re-frame/reg-event-db
+          ::on-thing
+          (fn [db [_ payload]]
+            (assoc db ::thing payload)))
+
+         (re-frame/dispatch [::re-graph/query "{ things { id } }" {:some "variable"} [::on-thing]])
+
+         (testing "responses are sent to the callback"
+           (is (= expected-response-payload
+                  (::thing @app-db))))
+
+         (on-ws-message (clj->js {:data (js/JSON.stringify
+                                         (clj->js {:type "complete"
+                                                   :id "random-query-id"}))}))
+
+         (testing "the callback is removed afterwards"
+           (is (nil? (get-in @app-db [:re-graph :subscriptions "random-query-id"])))))))))
+
 (deftest http-query-test
   (run-test-sync
    (let [expected-http-url "http://foo.bar/graph-ql"]
-     (re-frame/dispatch [::re-graph/init {:http-url expected-http-url}])
+     (re-frame/dispatch [::re-graph/init {:http-url expected-http-url
+                                          :ws-url nil}])
 
      (let [expected-query-payload {:query "query { things { id } }"
                                    :variables {:some "variable"}}
            expected-response-payload {:things [{:id 1} {:id 2}]}]
 
-       (testing "Requests can be made"
+       (testing "Queries can be made"
 
          (re-frame/reg-fx
           ::internals/send-http

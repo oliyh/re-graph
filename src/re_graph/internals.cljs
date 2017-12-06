@@ -19,9 +19,13 @@
  ::on-ws-data
  (fn [{:keys [db]} [_ subscription-id payload]]
    (if-let [callback-event (get-in db [:re-graph :subscriptions (name subscription-id) :callback])]
-     {:db db
-      :dispatch (conj callback-event (:data payload))}
+     {:dispatch (conj callback-event (:data payload))}
      (js/console.debug "No callback-event found for subscription" subscription-id))))
+
+(re-frame/reg-event-db
+ ::on-ws-complete
+ (fn [db [_ subscription-id]]
+   (update-in db [:re-graph :subscriptions] dissoc (name subscription-id))))
 
 (re-frame/reg-event-fx
  ::on-ws-open
@@ -49,6 +53,9 @@
     (condp = (.-type data)
       "data"
       (re-frame/dispatch [::on-ws-data (.-id data) (js->clj (.-payload data) :keywordize-keys true)])
+
+      "complete"
+      (re-frame/dispatch [::on-ws-complete (.-id data)])
 
       "error"
       (js/console.warn (str "GraphQL error for " (.-id data) ": " (.. data -payload -message)))
@@ -84,3 +91,6 @@
   (let [host-and-port (.-host js/window.location)
         ssl? (re-find #"^https" (.-origin js/window.location))]
     (str (if ssl? "wss" "ws") "://" host-and-port "/graphql-ws")))
+
+(defn generate-query-id []
+  (.substr (.toString (js/Math.random) 36) 2 8))
