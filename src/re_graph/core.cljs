@@ -83,6 +83,9 @@
       "data"
       (re-frame/dispatch [::on-ws-data (.-id data) (js->clj (.-payload data) :keywordize-keys true)])
 
+      "error"
+      (js/console.warn (str "GraphQL error for " (.-id data) ": " (.. data -payload -message)))
+
       (js/console.debug "Ignoring graphql-ws event" (.-type data)))))
 
 (defn- on-open [ws]
@@ -91,6 +94,9 @@
 
 (defn- on-close [e]
   (re-frame/dispatch [::on-ws-close]))
+
+(defn- on-error [e]
+  (js/console.warn "GraphQL websocket error" e))
 
 (re-frame/reg-event-fx
  ::reconnect-ws
@@ -104,7 +110,8 @@
    (let [ws (js/WebSocket. ws-url "graphql-ws")]
      (aset ws "onmessage" on-ws-message)
      (aset ws "onopen" (on-open ws))
-     (aset ws "onclose" on-close))))
+     (aset ws "onclose" on-close)
+     (aset ws "onerror" on-error))))
 
 (defn- default-ws-url []
   (let [host-and-port (.-host js/window.location)
