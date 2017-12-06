@@ -7,9 +7,16 @@
             [devcards.core :refer-macros [deftest]]))
 
 (def on-ws-message @#'re-graph/on-ws-message)
+(def on-open @#'re-graph/on-open)
+
+(re-frame/reg-fx
+ ::re-graph/connect-ws
+ (fn [& args]
+   ((on-open nil))))
 
 (deftest subscription-test
   (run-test-sync
+   (re-frame/dispatch [::re-graph/init])
 
    (let [expected-subscription-payload {:id "my-sub"
                                         :type "start"
@@ -17,8 +24,6 @@
                                                   :variables {:some "variable"}}}
          expected-unsubscription-payload {:id "my-sub"
                                           :type "stop"}]
-
-     (re-frame/dispatch [::re-graph/on-ws-open])
 
      (testing "Subscriptions can be registered"
 
@@ -63,6 +68,14 @@
 (deftest websocket-lifecycle-test
   (run-test-sync
 
+   (re-frame/reg-fx
+    ::re-graph/connect-ws
+    (fn [& args]
+      ;; do nothing
+      ))
+
+   (re-frame/dispatch [::re-graph/init])
+
    (let [expected-subscription-payload {:id "my-sub"
                                         :type "start"
                                         :payload {:query "subscription { things { id } }"
@@ -82,36 +95,38 @@
             (is (= expected-subscription-payload
                    payload))))
 
-         (re-frame/dispatch [::re-graph/on-ws-open])
+         ((on-open nil))
 
          (is (empty? (get-in @app-db [:re-graph :websocket :queue]))))))))
 
 (deftest http-query-test
   (run-test-sync
-   (let [expected-query-payload {:query "query { things { id } }"
-                                 :variables {:some "variable"}}
-         expected-response-payload {:things [{:id 1} {:id 2}]}]
+   (let [expected-http-url "http://foo.bar/graph-ql"]
+     (re-frame/dispatch [::re-graph/init {:http-url expected-http-url}])
 
-     (testing "Requests can be made"
+     (let [expected-query-payload {:query "query { things { id } }"
+                                   :variables {:some "variable"}}
+           expected-response-payload {:things [{:id 1} {:id 2}]}]
 
-       (re-frame/reg-fx
-        ::re-graph/send-http
-        (fn [[http-url {:keys [payload]} callback-fn]]
-          (is (= expected-query-payload
-                 payload))
+       (testing "Requests can be made"
 
-          ;; todo sync init without actually creating a ws connection
-          ;; (is (= expected-http-url http-url))
+         (re-frame/reg-fx
+          ::re-graph/send-http
+          (fn [[http-url {:keys [payload]} callback-fn]]
+            (is (= expected-query-payload
+                   payload))
 
-          (callback-fn {:data expected-response-payload})))
+            (is (= expected-http-url http-url))
 
-       (re-frame/reg-event-db
-        ::on-thing
-        (fn [db [_ payload]]
-          (assoc db ::thing payload)))
+            (callback-fn {:data expected-response-payload})))
 
-       (re-frame/dispatch [::re-graph/query "{ things { id } }" {:some "variable"} [::on-thing]])
+         (re-frame/reg-event-db
+          ::on-thing
+          (fn [db [_ payload]]
+            (assoc db ::thing payload)))
 
-       (testing "responses are sent to the callback"
-         (is (= expected-response-payload
-                (::thing @app-db))))))))
+         (re-frame/dispatch [::re-graph/query "{ things { id } }" {:some "variable"} [::on-thing]])
+
+         (testing "responses are sent to the callback"
+           (is (= expected-response-payload
+                  (::thing @app-db)))))))))

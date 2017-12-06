@@ -58,11 +58,13 @@
 
 (re-frame/reg-event-fx
  ::on-ws-open
- (fn [{:keys [db]}]
+ (fn [{:keys [db]} [_ ws]]
    (merge
-    {:db (-> db
-             (assoc-in [:re-graph :websocket :ready?] true)
-             (assoc-in [:re-graph :websocket :queue] []))}
+    {:db (update-in db [:re-graph :websocket]
+                    assoc
+                    :connection ws
+                    :ready? true
+                    :queue [])}
     (when-let [queue (not-empty (get-in db [:re-graph :websocket :queue]))]
       {:dispatch-n queue}))))
 
@@ -79,27 +81,33 @@
 
       (js/console.debug "Ignoring graphql-ws event" (.-type data)))))
 
-(defn- on-open [e]
-  (re-frame/dispatch [::on-ws-open]))
+(defn- on-open [ws]
+  (fn [e]
+    (re-frame/dispatch [::on-ws-open])))
 
 (defn- on-close [e]
   (re-frame/dispatch [::on-ws-close]))
+
+(re-frame/reg-fx
+ ::connect-ws
+ (fn [[ws-url]]
+   (let [ws (js/WebSocket. ws-url "graphql-ws")]
+     (aset ws "onmessage" on-ws-message)
+     (aset ws "onopen" (on-open ws))
+     (aset ws "onclose" on-close))))
 
 (defn- default-ws-url []
   (let [host-and-port (.-host js/window.location)
         ssl? (re-find #"^https" (.-origin js/window.location))]
     (str (if ssl? "wss" "ws") "://" host-and-port "/graphql-ws")))
 
-(re-frame/reg-event-db
+(re-frame/reg-event-fx
  ::init
- (fn [db [_ {:keys [ws-url http-url]}]]
-   (let [ws-url (or ws-url (default-ws-url))
-         ws (js/WebSocket. ws-url "graphql-ws")]
+ (fn [{:keys [db]} [_ {:keys [ws-url http-url]}]]
+   (let [ws-url (or ws-url (default-ws-url))]
 
-     (aset ws "onmessage" on-ws-message)
-     (aset ws "onopen" on-open)
-     (aset ws "onclose" on-close)
-     (assoc db :re-graph {:websocket {:connection ws
-                                      :ready? false
-                                      :queue []}
-                          :http-url (or http-url "/graphql")}))))
+     {:db (assoc db :re-graph {:websocket {:url ws-url
+                                           :ready? false
+                                           :queue []}
+                               :http-url (or http-url "/graphql")})
+      ::connect-ws [ws-url]})))
