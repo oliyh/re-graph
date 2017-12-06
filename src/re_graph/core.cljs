@@ -83,7 +83,7 @@
 
 (defn- on-open [ws]
   (fn [e]
-    (re-frame/dispatch [::on-ws-open])))
+    (re-frame/dispatch [::on-ws-open ws])))
 
 (defn- on-close [e]
   (re-frame/dispatch [::on-ws-close]))

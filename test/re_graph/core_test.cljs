@@ -12,7 +12,7 @@
 (re-frame/reg-fx
  ::re-graph/connect-ws
  (fn [& args]
-   ((on-open nil))))
+   ((on-open ::websocket-connection))))
 
 (deftest subscription-test
   (run-test-sync
@@ -29,7 +29,8 @@
 
        (re-frame/reg-fx
         ::re-graph/send-ws
-        (fn [[_ payload]]
+        (fn [[ws payload]]
+          (is (= ::websocket-connection ws))
           (is (= expected-subscription-payload
                  payload))))
 
@@ -57,7 +58,8 @@
        (testing "and unregistered"
          (re-frame/reg-fx
           ::re-graph/send-ws
-          (fn [[_ payload]]
+          (fn [[ws payload]]
+            (is (= ::websocket-connection ws))
             (is (= expected-unsubscription-payload
                    payload))))
 
@@ -70,9 +72,7 @@
 
    (re-frame/reg-fx
     ::re-graph/connect-ws
-    (fn [& args]
-      ;; do nothing
-      ))
+    (constantly nil))
 
    (re-frame/dispatch [::re-graph/init])
 
@@ -91,11 +91,12 @@
 
          (re-frame/reg-fx
           ::re-graph/send-ws
-          (fn [[_ payload]]
+          (fn [[ws payload]]
+            (is (= ::websocket-connection ws))
             (is (= expected-subscription-payload
                    payload))))
 
-         ((on-open nil))
+         ((on-open ::websocket-connection))
 
          (is (empty? (get-in @app-db [:re-graph :websocket :queue]))))))))
 
