@@ -71,7 +71,9 @@
 (re-frame/reg-event-fx
  ::on-ws-close
  (fn [{:keys [db]}]
-   {:db (assoc-in db [:re-graph :websocket :ready?] false)}))
+   {:db (assoc-in db [:re-graph :websocket :ready?] false)
+    :dispatch-later [{:ms (get-in db [:re-graph :websocket :reconnect-timeout])
+                      :dispatch [::reconnect-ws]}]}))
 
 (defn- on-ws-message [m]
   (let [data (js/JSON.parse (.-data m))]
@@ -88,6 +90,12 @@
 (defn- on-close [e]
   (re-frame/dispatch [::on-ws-close]))
 
+(re-frame/reg-event-fx
+ ::reconnect-ws
+ (fn [{:keys [db]}]
+   (when-not (get-in db [:re-graph :websocket :ready?])
+     {::connect-ws [(get-in db [:re-graph :websocket :url])]})))
+
 (re-frame/reg-fx
  ::connect-ws
  (fn [[ws-url]]
@@ -103,11 +111,13 @@
 
 (re-frame/reg-event-fx
  ::init
- (fn [{:keys [db]} [_ {:keys [ws-url http-url]}]]
-   (let [ws-url (or ws-url (default-ws-url))]
+ (fn [{:keys [db]} [_ {:keys [ws-url http-url ws-reconnect-timeout]
+                       :or {ws-url (default-ws-url)
+                            ws-reconnect-timeout 5000}}]]
 
-     {:db (assoc db :re-graph {:websocket {:url ws-url
-                                           :ready? false
-                                           :queue []}
-                               :http-url (or http-url "/graphql")})
-      ::connect-ws [ws-url]})))
+   {:db (assoc db :re-graph {:websocket {:url ws-url
+                                         :ready? false
+                                         :queue []
+                                         :reconnect-timeout ws-reconnect-timeout}
+                             :http-url (or http-url "/graphql")})
+    ::connect-ws [ws-url]}))

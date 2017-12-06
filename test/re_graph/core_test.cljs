@@ -2,12 +2,13 @@
   (:require [re-graph.core :as re-graph]
             [re-frame.core :as re-frame]
             [re-frame.db :refer [app-db]]
-            [day8.re-frame.test :refer-macros [run-test-sync]]
+            [day8.re-frame.test :refer-macros [run-test-sync run-test-async wait-for]]
             [cljs.test :refer-macros [deftest is testing run-tests]]
             [devcards.core :refer-macros [deftest]]))
 
 (def on-ws-message @#'re-graph/on-ws-message)
 (def on-open @#'re-graph/on-open)
+(def on-close @#'re-graph/on-close)
 
 (re-frame/reg-fx
  ::re-graph/connect-ws
@@ -99,6 +100,23 @@
          ((on-open ::websocket-connection))
 
          (is (empty? (get-in @app-db [:re-graph :websocket :queue]))))))))
+
+(deftest websocket-reconnection-test
+  (run-test-async
+   (testing "websocket reconnects when disconnected"
+     (re-frame/dispatch-sync [::re-graph/init {:ws-reconnect-timeout 1}])
+
+     (wait-for
+      [::re-graph/on-ws-open]
+      (is (get-in @app-db [:re-graph :websocket :ready?]))
+
+      (on-close)
+      (wait-for
+       [::re-graph/on-ws-close]
+       (is (false? (get-in @app-db [:re-graph :websocket :ready?])))
+
+       (wait-for [::re-graph/on-ws-open]
+                 (is (get-in @app-db [:re-graph :websocket :ready?]))))))))
 
 (deftest http-query-test
   (run-test-sync
