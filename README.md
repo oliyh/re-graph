@@ -7,7 +7,12 @@ re-graph is a graphql client for [re-frame](https://github.com/Day8/re-frame) ap
 This library behaves like the popular [Apollo client](https://github.com/apollographql/subscriptions-transport-ws)
 for graphql and as such is compatible with [lacinia-pedestal](https://github.com/walmartlabs/lacinia-pedestal).
 
-It supports HTTP and WebSockets (required for subscriptions), preferring WebSocket when available.
+Features include:
+* Subscriptions and queries
+* Websocket and HTTP transports
+* Apollo-compatible servers like lacinia-pedestal
+* Queueing websocket messages until ready
+* Websocket reconnection on disconnect
 
 ## Usage
 
