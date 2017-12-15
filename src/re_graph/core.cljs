@@ -3,6 +3,29 @@
             [re-graph.internals :as internals]))
 
 (re-frame/reg-event-fx
+ ::mutate
+ (fn [{:keys [db]} [_ query variables callback-event :as event]]
+   (cond
+     (get-in db [:re-graph :websocket :ready?])
+     (let [query-id (internals/generate-query-id)]
+       {:db (assoc-in db [:re-graph :subscriptions query-id] {:callback callback-event})
+        ::internals/send-ws [(get-in db [:re-graph :websocket :connection])
+                             {:id query-id
+                              :type "start"
+                              :payload {:query (str "mutation " query)
+                                        :variables variables}}]})
+
+     (get-in db [:re-graph :websocket])
+     {:db (update-in db [:re-graph :websocket :queue] conj event)}
+
+     :else
+     {::internals/send-http [(get-in db [:re-graph :http-url])
+                             {:payload {:query (str "mutation " query)
+                                        :variables variables}}
+                             (fn [payload]
+                               (re-frame/dispatch (conj callback-event (:data payload))))]})))
+
+(re-frame/reg-event-fx
  ::query
  (fn [{:keys [db]} [_ query variables callback-event :as event]]
    (cond
