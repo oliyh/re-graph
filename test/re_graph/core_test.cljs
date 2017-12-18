@@ -195,3 +195,36 @@
          (testing "responses are sent to the callback"
            (is (= expected-response-payload
                   (::thing @app-db)))))))))
+
+(deftest http-mutation-test
+  (run-test-sync
+   (let [expected-http-url "http://foo.bar/graph-ql"]
+     (re-frame/dispatch [::re-graph/init {:http-url expected-http-url
+                                          :ws-url nil}])
+
+     (let [mutation (str "signin($login:String!,$password:String!){"
+                         "signin(login:$login,password:$password){id}}")
+           params {:login "alice" :password "secret"}
+           expected-query-payload {:query (str "mutation " mutation)
+                                   :variables params}
+           expected-response-payload {:id 1}]
+
+       (testing "Mutations can be made"
+
+         (re-frame/reg-fx
+          ::internals/send-http
+          (fn [[http-url {:keys [payload]} callback-fn]]
+            (is (= expected-query-payload payload))
+            (is (= expected-http-url http-url))
+            (callback-fn {:data expected-response-payload})))
+
+         (re-frame/reg-event-db
+          ::on-mutate
+          (fn [db [_ payload]]
+            (assoc db ::mutation payload)))
+
+         (re-frame/dispatch [::re-graph/mutate mutation params [::on-mutate]])
+
+         (testing "responses are sent to the callback"
+           (is (= expected-response-payload
+                  (::mutation @app-db)))))))))
