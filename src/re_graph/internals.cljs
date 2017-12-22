@@ -19,7 +19,7 @@
  ::on-ws-data
  (fn [{:keys [db]} [_ subscription-id payload]]
    (if-let [callback-event (get-in db [:re-graph :subscriptions (name subscription-id) :callback])]
-     {:dispatch (conj callback-event (:data payload))}
+     {:dispatch (conj callback-event payload)}
      (js/console.debug "No callback-event found for subscription" subscription-id))))
 
 (re-frame/reg-event-db

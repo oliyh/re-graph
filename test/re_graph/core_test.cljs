@@ -43,7 +43,7 @@
 
        (testing "messages from the WS are sent to the callback"
 
-         (let [expected-response-payload {:things [{:id 1} {:id 2}]}]
+         (let [expected-response-payload {:data {:things [{:id 1} {:id 2}]}}]
            (re-frame/reg-event-db
             ::on-thing
             (fn [db [_ payload]]
@@ -52,7 +52,7 @@
            (on-ws-message (clj->js {:data (js/JSON.stringify
                                            (clj->js {:type "data"
                                                      :id "my-sub"
-                                                     :payload {:data expected-response-payload}}))}))
+                                                     :payload expected-response-payload}))}))
 
            (is (= expected-response-payload
                   (::thing @app-db)))))
@@ -128,7 +128,7 @@
                                    :type "start"
                                    :payload {:query "query { things { id } }"
                                              :variables {:some "variable"}}}
-           expected-response-payload {:things [{:id 1} {:id 2}]}]
+           expected-response-payload {:data {:things [{:id 1} {:id 2}]}}]
 
        (testing "Queries can be made"
 
@@ -143,7 +143,7 @@
             (on-ws-message (clj->js {:data (js/JSON.stringify
                                             (clj->js {:type "data"
                                                       :id (:id payload)
-                                                      :payload {:data expected-response-payload}}))}))))
+                                                      :payload expected-response-payload}))}))))
 
          (re-frame/reg-event-db
           ::on-thing
@@ -171,7 +171,7 @@
 
      (let [expected-query-payload {:query "query { things { id } }"
                                    :variables {:some "variable"}}
-           expected-response-payload {:things [{:id 1} {:id 2}]}]
+           expected-response-payload {:data {:things [{:id 1} {:id 2}]}}]
 
        (testing "Queries can be made"
 
@@ -183,7 +183,7 @@
 
             (is (= expected-http-url http-url))
 
-            (callback-fn {:data expected-response-payload})))
+            (callback-fn expected-response-payload)))
 
          (re-frame/reg-event-db
           ::on-thing
@@ -207,7 +207,7 @@
            params {:login "alice" :password "secret"}
            expected-query-payload {:query (str "mutation " mutation)
                                    :variables params}
-           expected-response-payload {:id 1}]
+           expected-response-payload {:data {:id 1}}]
 
        (testing "Mutations can be made"
 
@@ -216,7 +216,7 @@
           (fn [[http-url {:keys [payload]} callback-fn]]
             (is (= expected-query-payload payload))
             (is (= expected-http-url http-url))
-            (callback-fn {:data expected-response-payload})))
+            (callback-fn expected-response-payload)))
 
          (re-frame/reg-event-db
           ::on-mutate
