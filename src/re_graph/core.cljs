@@ -23,7 +23,7 @@
                              {:payload {:query (str "mutation " query)
                                         :variables variables}}
                              (fn [payload]
-                               (re-frame/dispatch (conj callback-event (:data payload))))]})))
+                               (re-frame/dispatch (conj callback-event payload)))]})))
 
 (re-frame/reg-event-fx
  ::query
@@ -46,7 +46,7 @@
                              {:payload {:query (str "query " query)
                                         :variables variables}}
                              (fn [payload]
-                               (re-frame/dispatch (conj callback-event (:data payload))))]})))
+                               (re-frame/dispatch (conj callback-event payload)))]})))
 
 (re-frame/reg-event-fx
  ::subscribe
