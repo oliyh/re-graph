@@ -8,7 +8,7 @@ This library behaves like the popular [Apollo client](https://github.com/apollog
 for graphql and as such is compatible with [lacinia-pedestal](https://github.com/walmartlabs/lacinia-pedestal).
 
 Features include:
-* Subscriptions and queries
+* Subscriptions, queries and mutations
 * Websocket and HTTP transports
 * Apollo-compatible servers like lacinia-pedestal
 * Queueing websocket messages until ready
