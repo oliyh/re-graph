@@ -31,8 +31,8 @@ Dispatch the `init` event to bootstrap it and then use the `:subscribe`, `:unsub
 
 (re-frame/reg-event-db
   ::on-thing
-  (fn [db [_ {:keys[data errors] :as payload}]]
-    ;; do things with payload e.g. write it into the re-frame database
+  (fn [db [_ {:keys [data errors] :as payload}]]
+    ;; do things with data e.g. write it into the re-frame database
     ))
 
 ;; start a subscription, with responses sent to the callback event provided
