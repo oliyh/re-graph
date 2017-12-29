@@ -9,10 +9,10 @@ for graphql and as such is compatible with [lacinia-pedestal](https://github.com
 
 Features include:
 * Subscriptions, queries and mutations
-* Websocket and HTTP transports
-* Apollo-compatible servers like lacinia-pedestal
-* Queueing websocket messages until ready
-* Websocket reconnection on disconnect
+* Supports websocket and HTTP transports
+* Works with Apollo-compatible servers like lacinia-pedestal
+* Queues websocket messages until ready
+* Websocket reconnects on disconnect
 
 ## Usage
 
