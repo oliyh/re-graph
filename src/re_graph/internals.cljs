@@ -15,6 +15,16 @@
  (fn [[websocket payload]]
    (.send websocket (js/JSON.stringify (clj->js payload)))))
 
+(re-frame/reg-fx
+ ::call-callback
+ (fn [[callback-fn payload]]
+   (callback-fn payload)))
+
+(re-frame/reg-event-fx
+ ::callback
+ (fn [_ [_ callback-fn payload]]
+   {::call-callback [callback-fn payload]}))
+
 (re-frame/reg-event-fx
  ::on-ws-data
  (fn [{:keys [db]} [_ subscription-id payload]]

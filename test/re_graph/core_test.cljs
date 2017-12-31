@@ -228,3 +228,52 @@
          (testing "responses are sent to the callback"
            (is (= expected-response-payload
                   (::mutation @app-db)))))))))
+
+(deftest non-re-frame-test
+  (testing "can call normal functions instead of needing re-frame"
+    (run-test-sync
+     (re-graph/init)
+
+     (let [expected-subscription-payload {:id "my-sub"
+                                          :type "start"
+                                          :payload {:query "subscription { things { id } }"
+                                                    :variables {:some "variable"}}}
+           expected-unsubscription-payload {:id "my-sub"
+                                            :type "stop"}
+           expected-response-payload {:data {:things [{:id 1} {:id 2}]}}
+           callback-called? (atom false)
+           callback-fn (fn [payload]
+                         (reset! callback-called? true)
+                         (is (= expected-response-payload payload)))]
+
+       (re-frame/reg-fx
+        ::internals/send-ws
+        (fn [[ws payload]]
+          (is (= ::websocket-connection ws))
+          (is (= expected-subscription-payload
+                 payload))))
+
+       (re-graph/subscribe :my-sub "{ things { id } }" {:some "variable"} callback-fn)
+
+       (is (= [::internals/callback callback-fn]
+              (get-in @app-db [:re-graph :subscriptions "my-sub" :callback])))
+
+       (testing "messages from the WS are sent to the callback-fn"
+         (on-ws-message (clj->js {:data (js/JSON.stringify
+                                         (clj->js {:type "data"
+                                                   :id "my-sub"
+                                                   :payload expected-response-payload}))}))
+
+         (is @callback-called?))
+
+       (testing "and unregistered"
+         (re-frame/reg-fx
+          ::internals/send-ws
+          (fn [[ws payload]]
+            (is (= ::websocket-connection ws))
+            (is (= expected-unsubscription-payload
+                   payload))))
+
+         (re-graph/unsubscribe :my-sub)
+
+         (is (nil? (get-in @app-db [:re-graph :subscriptions "my-sub"]))))))))

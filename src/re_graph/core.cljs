@@ -25,6 +25,9 @@
                              (fn [payload]
                                (re-frame/dispatch (conj callback-event payload)))]})))
 
+(defn mutate [query variables callback-fn]
+  (re-frame/dispatch [::mutate query variables [::internals/callback callback-fn]]))
+
 (re-frame/reg-event-fx
  ::query
  (fn [{:keys [db]} [_ query variables callback-event :as event]]
@@ -48,6 +51,9 @@
                              (fn [payload]
                                (re-frame/dispatch (conj callback-event payload)))]})))
 
+(defn query [query variables callback-fn]
+  (re-frame/dispatch [::query query variables [::internals/callback callback-fn]]))
+
 (re-frame/reg-event-fx
  ::subscribe
  (fn [{:keys [db]} [_ subscription-id query variables callback-event :as event]]
@@ -66,6 +72,9 @@
      :else
      (js/console.error "Websocket is not enabled, subscriptions are not possible. Please check your re-graph configuration"))))
 
+(defn subscribe [subscription-id query variables callback-fn]
+  (re-frame/dispatch [::subscribe subscription-id query variables [::internals/callback callback-fn]]))
+
 (re-frame/reg-event-fx
  ::unsubscribe
  (fn [{:keys [db]} [_ subscription-id]]
@@ -76,6 +85,9 @@
                             :type "stop"}]}
 
      {:db (update-in db [:re-graph :websocket :queue] conj [::unsubscribe subscription-id])})))
+
+(defn unsubscribe [subscription-id]
+  (re-frame/dispatch [::unsubscribe subscription-id]))
 
 (re-frame/reg-event-fx
  ::init
@@ -95,3 +107,6 @@
                                 {:http-url http-url})))}
     (when ws-url
       {::internals/connect-ws [ws-url]}))))
+
+(defn init [& [args]]
+  (re-frame/dispatch [::init args]))

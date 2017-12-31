@@ -1,6 +1,6 @@
 # re-graph
 
-re-graph is a graphql client for [re-frame](https://github.com/Day8/re-frame) applications.
+re-graph is a graphql client for ClojureScript with bindings for [re-frame](https://github.com/Day8/re-frame) applications.
 
 ## Notes
 
@@ -20,7 +20,37 @@ Add re-graph to your project's dependencies:
 
 [![Clojars Project](https://img.shields.io/clojars/v/re-graph.svg)](https://clojars.org/re-graph)
 
-Dispatch the `init` event to bootstrap it and then use the `:subscribe`, `:unsubscribe` and `:query` events:
+### Vanilla ClojureScript
+
+Call the `init` function to bootstrap it and then use `subscribe`, `unsubscribe`, `query` and `mutate` functions:
+
+```clojure
+(require [re-graph.core :as re-graph])
+
+;; initialise re-graph, possibly including configuration options (see below)
+(re-graph/init {})
+
+(defn on-thing [{:keys [data errors] :as payload}]
+  ;; do things with data
+))
+
+;; start a subscription, with responses sent to the callback-fn provided
+(re-graph/subscribe :my-subscription-id  ;; this id should uniquely identify this subscription
+                    "{ things { id } }"  ;; your graphql query
+                    {:some "variable"}   ;; arguments map
+                    on-thing)            ;; callback-fn when messages are recieved
+
+;; stop the subscription
+(re-graph/unsubscribe :my-subscription-id)
+
+;; perform a query, with the response sent to the callback event provided
+(re-graph/query "{ things { id } }"  ;; your graphql query
+                 {:some "variable"}  ;; arguments map
+                 on-thing)           ;; callback event when response is recieved
+```
+
+### re-frame users
+Dispatch the `init` event to bootstrap it and then use the `:subscribe`, `:unsubscribe`, `:query` and `:mutate` events:
 
 ```clojure
 (require [re-graph.core :as re-graph]
