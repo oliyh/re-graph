@@ -85,8 +85,11 @@
 (re-frame/reg-event-fx
  ::reconnect-ws
  (fn [{:keys [db]}]
-   (when-not (get-in db [:re-graph :websocket :ready?])
-     {::connect-ws [(get-in db [:re-graph :websocket :url])]})))
+   (let [resume? (get-in db [:re-graph :websocket :resume-subscriptions?])]
+     (when-not (get-in db [:re-graph :websocket :ready?])
+       (merge {::connect-ws [(get-in db [:re-graph :websocket :url])]}
+              (when resume?
+                {:dispatch-n (->> db :re-graph :subscriptions vals (map :event))}))))))
 
 (re-frame/reg-fx
  ::connect-ws

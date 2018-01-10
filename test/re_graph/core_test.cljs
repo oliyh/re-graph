@@ -111,13 +111,36 @@
       [::internals/on-ws-open]
       (is (get-in @app-db [:re-graph :websocket :ready?]))
 
-      (on-close)
-      (wait-for
-       [::internals/on-ws-close]
-       (is (false? (get-in @app-db [:re-graph :websocket :ready?])))
+      ;; create a subscription and wait for it to be sent
+      (let [subscription-registration [::re-graph/subscribe :my-sub "{ things { id } }" {:some "variable"} [::on-thing]]
+            subscription-calls (atom 0)]
+        (re-frame/reg-fx
+         ::internals/send-ws
+         (fn [[ws payload]]
+           (is (= ::websocket-connection ws))
+           (is (= {:id "my-sub"
+                   :type "start"
+                   :payload {:query "subscription { things { id } }"
+                             :variables {:some "variable"}}}
+                  payload))
+           (swap! subscription-calls inc)))
 
-       (wait-for [::internals/on-ws-open]
-                 (is (get-in @app-db [:re-graph :websocket :ready?]))))))))
+        (re-frame/dispatch subscription-registration)
+
+        (on-close)
+        (wait-for
+         [::internals/on-ws-close]
+         (is (false? (get-in @app-db [:re-graph :websocket :ready?])))
+
+         (testing "websocket is reconnected"
+           (wait-for [::internals/on-ws-open]
+                     (is (get-in @app-db [:re-graph :websocket :ready?]))
+
+                     (testing "subscriptions are resumed"
+                       (wait-for
+                        [(fn [event]
+                           (= subscription-registration event))]
+                        (is (= 2 @subscription-calls))))))))))))
 
 (deftest websocket-query-test
   (with-redefs [internals/generate-query-id (constantly "random-query-id")]

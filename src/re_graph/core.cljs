@@ -59,7 +59,8 @@
  (fn [{:keys [db]} [_ subscription-id query variables callback-event :as event]]
    (cond
      (get-in db [:re-graph :websocket :ready?])
-     {:db (assoc-in db [:re-graph :subscriptions (name subscription-id)] {:callback callback-event})
+     {:db (assoc-in db [:re-graph :subscriptions (name subscription-id)] {:callback callback-event
+                                                                          :event event})
       ::internals/send-ws [(get-in db [:re-graph :websocket :connection])
                            {:id (name subscription-id)
                             :type "start"
@@ -91,10 +92,11 @@
 
 (re-frame/reg-event-fx
  ::init
- (fn [{:keys [db]} [_ {:keys [ws-url http-url ws-reconnect-timeout]
+ (fn [{:keys [db]} [_ {:keys [ws-url http-url ws-reconnect-timeout resume-subscriptions?]
                        :or {ws-url (internals/default-ws-url)
                             http-url "/graphql"
-                            ws-reconnect-timeout 5000}}]]
+                            ws-reconnect-timeout 5000
+                            resume-subscriptions? true}}]]
 
    (merge
     {:db (assoc db :re-graph (merge
@@ -102,7 +104,8 @@
                                 {:websocket {:url ws-url
                                              :ready? false
                                              :queue []
-                                             :reconnect-timeout ws-reconnect-timeout}})
+                                             :reconnect-timeout ws-reconnect-timeout
+                                             :resume-subscriptions? resume-subscriptions?}})
                               (when http-url
                                 {:http-url http-url})))}
     (when ws-url

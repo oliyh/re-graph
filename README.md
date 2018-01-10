@@ -89,9 +89,10 @@ Options can be passed to the init event, with the following possibilities:
 ```clojure
 (re-frame/dispatch
   [::re-graph/init
-    {:ws-url               "wss://foo.io/graphql-ws" ;; override the websocket url (defaults to /graphql-ws, nil to disable)
-     :http-url             "http://bar.io/graphql"   ;; override the http url (defaults to /graphql)
-     :ws-reconnect-timeout 2000                      ;; attempt reconnect n milliseconds after disconnect (default 5000, nil to disable)
+    {:ws-url                "wss://foo.io/graphql-ws" ;; override the websocket url (defaults to /graphql-ws, nil to disable)
+     :http-url              "http://bar.io/graphql"   ;; override the http url (defaults to /graphql)
+     :ws-reconnect-timeout  2000                      ;; attempt reconnect n milliseconds after disconnect (default 5000, nil to disable)
+     :resume-subscriptions? true                      ;; start existing subscriptions again when websocket is reconnected after a disconnect
   }])
 ```
 
