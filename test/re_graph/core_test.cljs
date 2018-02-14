@@ -100,7 +100,27 @@
 
          ((on-open ::websocket-connection))
 
-         (is (empty? (get-in @app-db [:re-graph :websocket :queue]))))))))
+         (is (empty? (get-in @app-db [:re-graph :websocket :queue]))))))
+
+   (testing "when re-graph is destroyed"
+     (testing "the subscriptions are cancelled"
+       (re-frame/reg-fx
+        ::internals/send-ws
+        (fn [[ws payload]]
+          (is (= ::websocket-connection ws))
+          (is (= {:id "my-sub" :type "stop"}
+                 payload)))))
+
+     (testing "the websocket is closed"
+       (re-frame/reg-fx
+        ::internals/disconnect-ws
+        (fn [[ws]]
+          (is (= ::websocket-connection ws)))))
+
+     (re-frame/dispatch [::re-graph/destroy])
+
+     (testing "the re-graph state is no more"
+       (is (nil? (:re-graph @app-db)))))))
 
 (deftest websocket-reconnection-test
   (run-test-async

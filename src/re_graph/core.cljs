@@ -115,5 +115,21 @@
     (when ws-url
       {::internals/connect-ws [ws-url]}))))
 
+(re-frame/reg-event-fx
+ ::destroy
+ (fn [{:keys [db]}]
+   (if-let [subscription-ids (not-empty (-> db :re-graph :subscriptions keys))]
+     {:dispatch-n (for [subscription-id subscription-ids]
+                    [::unsubscribe subscription-id])
+      :dispatch [::destroy]}
+
+     (merge
+      {:db (dissoc db :re-graph)}
+      (when-let [ws (get-in db [:re-graph :websocket :connection])]
+        {::internals/disconnect-ws [ws]})))))
+
 (defn init [& [args]]
   (re-frame/dispatch [::init args]))
+
+(defn destroy []
+  (re-frame/dispatch [::destroy]))

@@ -100,6 +100,11 @@
      (aset ws "onclose" on-close)
      (aset ws "onerror" on-error))))
 
+(re-frame/reg-fx
+ ::disconnect-ws
+ (fn [[ws]]
+   (.close ws)))
+
 (defn default-ws-url []
   (let [host-and-port (.-host js/window.location)
         ssl? (re-find #"^https" (.-origin js/window.location))]
