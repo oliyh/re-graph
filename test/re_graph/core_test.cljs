@@ -252,6 +252,25 @@
            (is (= expected-response-payload
                   (::mutation @app-db)))))))))
 
+
+(deftest http-request-fn-test
+  (run-test-sync
+   (let [expected-http-url "http://foo.bar/graph-ql"
+         expected-request {:with-credentials? false}]
+     (re-frame/dispatch [::re-graph/init {:http-url expected-http-url
+                                          :request-fn (fn [db] expected-request)
+                                          :ws-url nil}])
+     (testing "Request can be specified"
+         (re-frame/reg-fx
+          ::internals/send-http
+          (fn [[http-url {:keys [request payload]} callback-fn]]
+            (is (= expected-request
+                   request))))
+         (re-frame/dispatch [::re-graph/query "{ things { id } }" {:some "variable"} [::on-thing]])
+         (re-frame/dispatch [::re-graph/mutate "don't care" {:some "variable"} [::on-thing]])
+         ))))
+
+
 (deftest non-re-frame-test
   (testing "can call normal functions instead of needing re-frame"
     (run-test-sync
