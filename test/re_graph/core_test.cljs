@@ -253,12 +253,12 @@
                   (::mutation @app-db)))))))))
 
 
-(deftest http-request-fn-test
+(deftest http-request-template-test
   (run-test-sync
    (let [expected-http-url "http://foo.bar/graph-ql"
          expected-request {:with-credentials? false}]
      (re-frame/dispatch [::re-graph/init {:http-url expected-http-url
-                                          :request-fn (fn [db] expected-request)
+                                          :request-template expected-request
                                           :ws-url nil}])
      (testing "Request can be specified"
          (re-frame/reg-fx
