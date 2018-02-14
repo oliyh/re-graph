@@ -6,8 +6,8 @@
 
 (re-frame/reg-fx
  ::send-http
- (fn [[http-url {:keys [payload]} callback-fn]]
-   (go (let [response (a/<! (http/post http-url {:json-params payload}))]
+ (fn [[http-url {:keys [request payload]} callback-fn]]
+   (go (let [response (a/<! (http/post http-url (assoc request :json-params payload)))]
          (callback-fn (:body response))))))
 
 (re-frame/reg-fx

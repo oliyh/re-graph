@@ -2,6 +2,13 @@
   (:require [re-frame.core :as re-frame]
             [re-graph.internals :as internals]))
 
+(def default-request-template {})
+
+(defn request-template
+      "Retrieves the request-template from db (or returns a default creating an 'empty' request)."
+      [db]
+  (get-in db [:re-graph :request-template]))
+
 (re-frame/reg-event-fx
  ::mutate
  (fn [{:keys [db]} [_ query variables callback-event :as event]]
@@ -20,7 +27,8 @@
 
      :else
      {::internals/send-http [(get-in db [:re-graph :http-url])
-                             {:payload {:query (str "mutation " query)
+                             {:request (request-template db)
+                              :payload {:query (str "mutation " query)
                                         :variables variables}}
                              (fn [payload]
                                (re-frame/dispatch (conj callback-event payload)))]})))
@@ -46,7 +54,8 @@
 
      :else
      {::internals/send-http [(get-in db [:re-graph :http-url])
-                             {:payload {:query (str "query " query)
+                             {:request (request-template db)
+                              :payload {:query (str "query " query)
                                         :variables variables}}
                              (fn [payload]
                                (re-frame/dispatch (conj callback-event payload)))]})))
@@ -92,8 +101,9 @@
 
 (re-frame/reg-event-fx
  ::init
- (fn [{:keys [db]} [_ {:keys [ws-url http-url ws-reconnect-timeout resume-subscriptions?]
+ (fn [{:keys [db]} [_ {:keys [ws-url http-url request-template ws-reconnect-timeout resume-subscriptions?]
                        :or {ws-url (internals/default-ws-url)
+                            request-template default-request-template
                             http-url "/graphql"
                             ws-reconnect-timeout 5000
                             resume-subscriptions? true}}]]
@@ -107,7 +117,8 @@
                                              :reconnect-timeout ws-reconnect-timeout
                                              :resume-subscriptions? resume-subscriptions?}})
                               (when http-url
-                                {:http-url http-url})))}
+                                {:http-url http-url
+                                 :request-template request-template})))}
     (when ws-url
       {::internals/connect-ws [ws-url]}))))
 
