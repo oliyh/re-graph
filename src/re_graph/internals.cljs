@@ -59,18 +59,18 @@
                          :dispatch [::reconnect-ws]}]}))))
 
 (defn- on-ws-message [m]
-  (let [data (js/JSON.parse (.-data m))]
-    (condp = (.-type data)
+  (let [data (js/JSON.parse (aget m "data"))]
+    (condp = (aget data "type")
       "data"
-      (re-frame/dispatch [::on-ws-data (.-id data) (js->clj (.-payload data) :keywordize-keys true)])
+      (re-frame/dispatch [::on-ws-data (aget data "id") (js->clj (aget data "payload") :keywordize-keys true)])
 
       "complete"
-      (re-frame/dispatch [::on-ws-complete (.-id data)])
+      (re-frame/dispatch [::on-ws-complete (aget data "id")])
 
       "error"
-      (js/console.warn (str "GraphQL error for " (.-id data) ": " (.. data -payload -message)))
+      (js/console.warn (str "GraphQL error for " (aget data "id") ": " (aget data "payload" "message")))
 
-      (js/console.debug "Ignoring graphql-ws event" (.-type data)))))
+      (js/console.debug "Ignoring graphql-ws event" (aget data "type")))))
 
 (defn- on-open [ws]
   (fn [e]
