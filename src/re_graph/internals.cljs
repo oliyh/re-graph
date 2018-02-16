@@ -49,11 +49,19 @@
     (when-let [queue (not-empty (get-in db [:re-graph :websocket :queue]))]
       {:dispatch-n queue}))))
 
+(defn- deactivate-subscriptions [subscriptions]
+  (reduce-kv (fn [subs sub-id sub]
+               (assoc subs sub-id (assoc sub :active? false)))
+             {}
+             subscriptions))
+
 (re-frame/reg-event-fx
  ::on-ws-close
  (fn [{:keys [db]}]
    (merge
-    {:db (assoc-in db [:re-graph :websocket :ready?] false)}
+    {:db (-> db
+             (assoc-in [:re-graph :websocket :ready?] false)
+             (update-in [:re-graph :subscriptions] deactivate-subscriptions))}
     (when-let [reconnect-timeout (get-in db [:re-graph :websocket :reconnect-timeout])]
       {:dispatch-later [{:ms reconnect-timeout
                          :dispatch [::reconnect-ws]}]}))))

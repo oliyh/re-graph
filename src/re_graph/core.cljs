@@ -60,9 +60,13 @@
  ::subscribe
  (fn [{:keys [db]} [_ subscription-id query variables callback-event :as event]]
    (cond
+     (get-in db [:re-graph :subscriptions (name subscription-id) :active?])
+     {} ;; duplicate subscription
+
      (get-in db [:re-graph :websocket :ready?])
      {:db (assoc-in db [:re-graph :subscriptions (name subscription-id)] {:callback callback-event
-                                                                          :event event})
+                                                                          :event event
+                                                                          :active? true})
       ::internals/send-ws [(get-in db [:re-graph :websocket :connection])
                            {:id (name subscription-id)
                             :type "start"

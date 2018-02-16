@@ -41,6 +41,14 @@
        (is (= [::on-thing]
               (get-in @app-db [:re-graph :subscriptions "my-sub" :callback])))
 
+       (testing "and deduplicated"
+         (re-frame/reg-fx
+          ::internals/send-ws
+          (fn [_]
+            (is false "Should not have sent a websocket message for an existing subscription")))
+
+         (re-frame/dispatch [::re-graph/subscribe :my-sub "{ things { id } }" {:some "variable"} [::on-thing]]))
+
        (testing "messages from the WS are sent to the callback"
 
          (let [expected-response-payload {:data {:things [{:id 1} {:id 2}]}}]
