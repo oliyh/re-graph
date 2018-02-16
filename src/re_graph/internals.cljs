@@ -46,8 +46,13 @@
                     :connection ws
                     :ready? true
                     :queue [])}
-    (when-let [queue (not-empty (get-in db [:re-graph :websocket :queue]))]
-      {:dispatch-n queue}))))
+
+    (let [resume? (get-in db [:re-graph :websocket :resume-subscriptions?])
+          subscriptions (when resume? (->> db :re-graph :subscriptions vals (map :event)))
+          queue (get-in db [:re-graph :websocket :queue])]
+
+      (when-let [to-send (not-empty (concat subscriptions queue))]
+        {:dispatch-n to-send})))))
 
 (defn- deactivate-subscriptions [subscriptions]
   (reduce-kv (fn [subs sub-id sub]
@@ -93,11 +98,8 @@
 (re-frame/reg-event-fx
  ::reconnect-ws
  (fn [{:keys [db]}]
-   (let [resume? (get-in db [:re-graph :websocket :resume-subscriptions?])]
-     (when-not (get-in db [:re-graph :websocket :ready?])
-       (merge {::connect-ws [(get-in db [:re-graph :websocket :url])]}
-              (when resume?
-                {:dispatch-n (->> db :re-graph :subscriptions vals (map :event))}))))))
+   (when-not (get-in db [:re-graph :websocket :ready?])
+     {::connect-ws [(get-in db [:re-graph :websocket :url])]})))
 
 (re-frame/reg-fx
  ::connect-ws
