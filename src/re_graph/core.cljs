@@ -1,30 +1,32 @@
 (ns re-graph.core
   (:require [re-frame.core :as re-frame]
-            [re-graph.internals :as internals]))
+            [re-graph.internals :as internals]
+            [clojure.string :as string]))
 
 (re-frame/reg-event-fx
  ::mutate
  (fn [{:keys [db]} [_ query variables callback-event :as event]]
-   (cond
-     (get-in db [:re-graph :websocket :ready?])
-     (let [query-id (internals/generate-query-id)]
-       {:db (assoc-in db [:re-graph :subscriptions query-id] {:callback callback-event})
-        ::internals/send-ws [(get-in db [:re-graph :websocket :connection])
-                             {:id query-id
-                              :type "start"
-                              :payload {:query (str "mutation " query)
-                                        :variables variables}}]})
+   (let [query (str "mutation " (string/replace query #"^mutation\s?" ""))]
+     (cond
+       (get-in db [:re-graph :websocket :ready?])
+       (let [query-id (internals/generate-query-id)]
+         {:db (assoc-in db [:re-graph :subscriptions query-id] {:callback callback-event})
+          ::internals/send-ws [(get-in db [:re-graph :websocket :connection])
+                               {:id query-id
+                                :type "start"
+                                :payload {:query query
+                                          :variables variables}}]})
 
-     (get-in db [:re-graph :websocket])
-     {:db (update-in db [:re-graph :websocket :queue] conj event)}
+       (get-in db [:re-graph :websocket])
+       {:db (update-in db [:re-graph :websocket :queue] conj event)}
 
-     :else
-     {::internals/send-http [(get-in db [:re-graph :http-url])
-                             {:request (get-in db [:re-graph :http-parameters])
-                              :payload {:query (str "mutation " query)
-                                        :variables variables}}
-                             (fn [payload]
-                               (re-frame/dispatch (conj callback-event payload)))]})))
+       :else
+       {::internals/send-http [(get-in db [:re-graph :http-url])
+                               {:request (get-in db [:re-graph :http-parameters])
+                                :payload {:query query
+                                          :variables variables}}
+                               (fn [payload]
+                                 (re-frame/dispatch (conj callback-event payload)))]}))))
 
 (defn mutate [query variables callback-fn]
   (re-frame/dispatch [::mutate query variables [::internals/callback callback-fn]]))
@@ -32,26 +34,27 @@
 (re-frame/reg-event-fx
  ::query
  (fn [{:keys [db]} [_ query variables callback-event :as event]]
-   (cond
-     (get-in db [:re-graph :websocket :ready?])
-     (let [query-id (internals/generate-query-id)]
-       {:db (assoc-in db [:re-graph :subscriptions query-id] {:callback callback-event})
-        ::internals/send-ws [(get-in db [:re-graph :websocket :connection])
-                             {:id query-id
-                              :type "start"
-                              :payload {:query (str "query " query)
-                                        :variables variables}}]})
+   (let [query (str "query " (string/replace query #"^query\s?" ""))]
+     (cond
+       (get-in db [:re-graph :websocket :ready?])
+       (let [query-id (internals/generate-query-id)]
+         {:db (assoc-in db [:re-graph :subscriptions query-id] {:callback callback-event})
+          ::internals/send-ws [(get-in db [:re-graph :websocket :connection])
+                               {:id query-id
+                                :type "start"
+                                :payload {:query query
+                                          :variables variables}}]})
 
-     (get-in db [:re-graph :websocket])
-     {:db (update-in db [:re-graph :websocket :queue] conj event)}
+       (get-in db [:re-graph :websocket])
+       {:db (update-in db [:re-graph :websocket :queue] conj event)}
 
-     :else
-     {::internals/send-http [(get-in db [:re-graph :http-url])
-                             {:request (get-in db [:re-graph :http-parameters])
-                              :payload {:query (str "query " query)
-                                        :variables variables}}
-                             (fn [payload]
-                               (re-frame/dispatch (conj callback-event payload)))]})))
+       :else
+       {::internals/send-http [(get-in db [:re-graph :http-url])
+                               {:request (get-in db [:re-graph :http-parameters])
+                                :payload {:query query
+                                          :variables variables}}
+                               (fn [payload]
+                                 (re-frame/dispatch (conj callback-event payload)))]}))))
 
 (defn query [query variables callback-fn]
   (re-frame/dispatch [::query query variables [::internals/callback callback-fn]]))
@@ -70,7 +73,7 @@
       ::internals/send-ws [(get-in db [:re-graph :websocket :connection])
                            {:id (name subscription-id)
                             :type "start"
-                            :payload {:query (str "subscription " query)
+                            :payload {:query (str "subscription " (string/replace query #"^subscription\s?" ""))
                                       :variables variables}}]}
 
      (get-in db [:re-graph :websocket])

@@ -346,3 +346,36 @@
          (re-graph/unsubscribe :my-sub)
 
          (is (nil? (get-in @app-db [:re-graph :subscriptions "my-sub"]))))))))
+
+(deftest venia-compatibility-test
+  (run-test-sync
+   (let [expected-http-url "http://foo.bar/graph-ql"]
+     (re-frame/dispatch [::re-graph/init {:http-url expected-http-url
+                                          :ws-url nil}])
+
+     (let [expected-query-payload {:query "query { things { id } }"
+                                   :variables {:some "variable"}}
+           expected-response-payload {:data {:things [{:id 1} {:id 2}]}}]
+
+       (testing "Ignores 'query' at the start of the query"
+
+         (re-frame/reg-fx
+          ::internals/send-http
+          (fn [[http-url {:keys [payload]} callback-fn]]
+            (is (= expected-query-payload
+                   payload))
+
+            (is (= expected-http-url http-url))
+
+            (callback-fn expected-response-payload)))
+
+         (re-frame/reg-event-db
+          ::on-thing
+          (fn [db [_ payload]]
+            (assoc db ::thing payload)))
+
+         (re-frame/dispatch [::re-graph/query "query { things { id } }" {:some "variable"} [::on-thing]])
+
+         (testing "responses are sent to the callback"
+           (is (= expected-response-payload
+                  (::thing @app-db)))))))))
