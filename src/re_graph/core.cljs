@@ -101,11 +101,12 @@
 
 (re-frame/reg-event-fx
  ::init
- (fn [{:keys [db]} [_ {:keys [ws-url http-url http-parameters ws-reconnect-timeout resume-subscriptions?]
+ (fn [{:keys [db]} [_ {:keys [ws-url http-url http-parameters ws-reconnect-timeout resume-subscriptions? connection-init-payload]
                        :or {ws-url (internals/default-ws-url)
                             http-parameters {}
                             http-url "/graphql"
                             ws-reconnect-timeout 5000
+                            connection-init-payload {}
                             resume-subscriptions? true}}]]
 
    (merge
@@ -113,6 +114,7 @@
                               (when ws-url
                                 {:websocket {:url ws-url
                                              :ready? false
+                                             :connection-init-payload connection-init-payload
                                              :queue []
                                              :reconnect-timeout ws-reconnect-timeout
                                              :resume-subscriptions? resume-subscriptions?}})

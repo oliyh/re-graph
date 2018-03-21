@@ -38,6 +38,15 @@
    (update-in db [:re-graph :subscriptions] dissoc (name subscription-id))))
 
 (re-frame/reg-event-fx
+  ::connection-init
+  (fn [{:keys [db]} _]
+    (let [ws (get-in db [:re-graph :websocket :connection])
+          payload (get-in db [:re-graph :websocket :connection-init-payload])]
+      {:db db
+       ::send-ws [ws {:type "connection_init"
+                      :payload payload}]})))
+
+(re-frame/reg-event-fx
  ::on-ws-open
  (fn [{:keys [db]} [_ ws]]
    (merge
@@ -49,10 +58,9 @@
 
     (let [resume? (get-in db [:re-graph :websocket :resume-subscriptions?])
           subscriptions (when resume? (->> db :re-graph :subscriptions vals (map :event)))
-          queue (get-in db [:re-graph :websocket :queue])]
-
-      (when-let [to-send (not-empty (concat subscriptions queue))]
-        {:dispatch-n to-send})))))
+          queue (get-in db [:re-graph :websocket :queue])
+          to-send (concat [[::connection-init]] subscriptions queue)]
+      {:dispatch-n to-send}))))
 
 (defn- deactivate-subscriptions [subscriptions]
   (reduce-kv (fn [subs sub-id sub]

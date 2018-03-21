@@ -16,6 +16,10 @@
  (fn [& args]
    ((on-open ::websocket-connection))))
 
+(re-frame/reg-fx
+  ::internals/send-ws
+  (fn [[ws payload]]))
+
 (deftest subscription-test
   (run-test-sync
    (re-frame/dispatch [::re-graph/init])
@@ -103,8 +107,10 @@
           ::internals/send-ws
           (fn [[ws payload]]
             (is (= ::websocket-connection ws))
-            (is (= expected-subscription-payload
-                   payload))))
+            (is (or
+                  (= "connection_init" (:type payload))
+                  (= expected-subscription-payload
+                     payload)))))
 
          ((on-open ::websocket-connection))
 
@@ -141,17 +147,19 @@
 
       ;; create a subscription and wait for it to be sent
       (let [subscription-registration [::re-graph/subscribe :my-sub "{ things { id } }" {:some "variable"} [::on-thing]]
-            subscription-calls (atom 0)]
+            sent-msgs (atom 0)]
         (re-frame/reg-fx
          ::internals/send-ws
          (fn [[ws payload]]
            (is (= ::websocket-connection ws))
-           (is (= {:id "my-sub"
-                   :type "start"
-                   :payload {:query "subscription { things { id } }"
-                             :variables {:some "variable"}}}
-                  payload))
-           (swap! subscription-calls inc)))
+           (is (or
+                 (= "connection_init" (:type payload))
+                 (= {:id "my-sub"
+                     :type "start"
+                     :payload {:query "subscription { things { id } }"
+                               :variables {:some "variable"}}}
+                    payload)))
+           (swap! sent-msgs inc)))
 
         (re-frame/dispatch subscription-registration)
 
@@ -168,7 +176,9 @@
                        (wait-for
                         [(fn [event]
                            (= subscription-registration event))]
-                        (is (= 2 @subscription-calls))))))))))))
+                        ;; 2 connection_init
+                        ;; 2 subscription
+                        (is (= 4 @sent-msgs))))))))))))
 
 (deftest websocket-query-test
   (with-redefs [internals/generate-query-id (constantly "random-query-id")]
