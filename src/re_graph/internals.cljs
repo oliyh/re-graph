@@ -53,7 +53,7 @@
     {:db (update-in db [:re-graph :websocket]
                     assoc
                     :connection ws
-                    :ready? true
+                    :ready? false
                     :queue [])}
 
     (let [resume? (get-in db [:re-graph :websocket :resume-subscriptions?])
@@ -69,6 +69,11 @@
              subscriptions))
 
 (re-frame/reg-event-fx
+  ::on-ws-connection-ack
+  (fn [{:keys [db]}]
+    {:db (assoc-in db [:re-graph :websocket :ready?] true)}))
+
+(re-frame/reg-event-fx
  ::on-ws-close
  (fn [{:keys [db]}]
    (merge
@@ -78,6 +83,7 @@
     (when-let [reconnect-timeout (get-in db [:re-graph :websocket :reconnect-timeout])]
       {:dispatch-later [{:ms reconnect-timeout
                          :dispatch [::reconnect-ws]}]}))))
+
 
 (defn- on-ws-message [m]
   (let [data (js/JSON.parse (aget m "data"))]
@@ -90,6 +96,9 @@
 
       "error"
       (js/console.warn (str "GraphQL error for " (aget data "id") ": " (aget data "payload" "message")))
+
+      "connection_ack"
+      (re-frame/dispatch [::on-ws-connection-ack])
 
       (js/console.debug "Ignoring graphql-ws event" (aget data "type")))))
 
