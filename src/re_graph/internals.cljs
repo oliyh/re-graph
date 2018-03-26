@@ -42,9 +42,9 @@
   (fn [{:keys [db]} _]
     (let [ws (get-in db [:re-graph :websocket :connection])
           payload (get-in db [:re-graph :websocket :connection-init-payload])]
-      {:db db
-       ::send-ws [ws {:type "connection_init"
-                      :payload payload}]})))
+      (when payload
+        {::send-ws [ws {:type "connection_init"
+                        :payload payload}]}))))
 
 (re-frame/reg-event-fx
  ::on-ws-open

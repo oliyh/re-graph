@@ -16,13 +16,9 @@
  (fn [& args]
    ((on-open ::websocket-connection))))
 
-(re-frame/reg-fx
-  ::internals/send-ws
-  (fn [[ws payload]]))
-
 (deftest subscription-test
   (run-test-sync
-   (re-frame/dispatch [::re-graph/init])
+   (re-frame/dispatch [::re-graph/init {:connection-init-payload nil}])
 
    (let [expected-subscription-payload {:id "my-sub"
                                         :type "start"
@@ -88,12 +84,13 @@
     ::internals/connect-ws
     (constantly nil))
 
-   (re-frame/dispatch [::re-graph/init])
-
-   (let [expected-subscription-payload {:id "my-sub"
+   (let [init-payload {:token "abc"}
+         expected-subscription-payload {:id "my-sub"
                                         :type "start"
                                         :payload {:query "subscription { things { id } }"
                                                   :variables {:some "variable"}}}]
+
+     (re-frame/dispatch [::re-graph/init {:connection-init-payload init-payload}])
 
      (testing "messages are queued when websocket isn't ready"
 
@@ -103,16 +100,22 @@
 
        (testing "and sent when websocket opens"
 
-         (re-frame/reg-fx
-          ::internals/send-ws
-          (fn [[ws payload]]
-            (is (= ::websocket-connection ws))
-            (is (or
-                  (= "connection_init" (:type payload))
-                  (= expected-subscription-payload
-                     payload)))))
+         (let [ws-messages (atom [])]
+           (re-frame/reg-fx
+            ::internals/send-ws
+            (fn [[ws payload]]
+              (swap! ws-messages conj [ws payload])))
 
-         ((on-open ::websocket-connection))
+           ((on-open ::websocket-connection))
+
+           (testing "the connection init payload is sent first"
+             (is (= [::websocket-connection
+                     {:type "connection_init"
+                      :payload init-payload}]
+                    (first @ws-messages))))
+
+           (is (= [::websocket-connection expected-subscription-payload]
+                  (second @ws-messages))))
 
          (is (empty? (get-in @app-db [:re-graph :websocket :queue]))))))
 
@@ -139,7 +142,8 @@
 (deftest websocket-reconnection-test
   (run-test-async
    (testing "websocket reconnects when disconnected"
-     (re-frame/dispatch-sync [::re-graph/init {:ws-reconnect-timeout 1}])
+     (re-frame/dispatch-sync [::re-graph/init {:connection-init-payload {:token "abc"}
+                                               :ws-reconnect-timeout 1}])
 
      (wait-for
       [::internals/on-ws-open]
@@ -183,7 +187,7 @@
 (deftest websocket-query-test
   (with-redefs [internals/generate-query-id (constantly "random-query-id")]
     (run-test-sync
-     (re-frame/dispatch [::re-graph/init])
+     (re-frame/dispatch [::re-graph/init {:connection-init-payload nil}])
 
      (let [expected-query-payload {:id "random-query-id"
                                    :type "start"
@@ -311,7 +315,7 @@
 (deftest non-re-frame-test
   (testing "can call normal functions instead of needing re-frame"
     (run-test-sync
-     (re-graph/init)
+     (re-graph/init {:connection-init-payload nil})
 
      (let [expected-subscription-payload {:id "my-sub"
                                           :type "start"
