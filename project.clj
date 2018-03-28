@@ -11,26 +11,26 @@
                   ["change" "version" "leiningen.release/bump-version"]
                   ["vcs" "commit"]
                   ["vcs" "push"]]
-  :dependencies [[re-frame "0.10.2"]
-                 [cljs-http "0.1.43"]]
+  :dependencies [[re-frame "0.10.5"]
+                 [cljs-http "0.1.44"]]
   :plugins [[lein-cljsbuild "1.1.7"]
             [lein-doo "0.1.8"]
             [lein-figwheel "0.5.14"]]
-  :profiles {:provided {:dependencies [[org.clojure/clojure "1.9.0-beta2"]
-                                       [org.clojure/clojurescript "1.9.946"]]}
+  :profiles {:provided {:dependencies [[org.clojure/clojure "1.9.0"]
+                                       [org.clojure/clojurescript "1.10.238"]]}
              :dev {:source-paths ["dev"]
                    :resource-paths ["dev-resources"]
                    :exclusions [[org.clojure/tools.reader]]
-                   :dependencies [[org.clojure/tools.reader "1.1.0"]
+                   :dependencies [[org.clojure/tools.reader "1.2.2"]
                                   [com.cemerick/piggieback "0.2.2"]
-                                  [figwheel-sidecar "0.5.14"]
-                                  [binaryage/devtools "0.8.3"]
-                                  [devcards "0.2.2"]
+                                  [figwheel-sidecar "0.5.15"]
+                                  [binaryage/devtools "0.9.9"]
+                                  [devcards "0.2.4"]
                                   [day8.re-frame/test "0.1.5"]
-                                  [lein-doo "0.1.6"]
+                                  [lein-doo "0.1.10"]
 
                                   ;; gh-pages deploy
-                                  [leiningen-core "2.7.1"]]
+                                  [leiningen-core "2.8.1"]]
                    :repl-options {:init-ns user
                                   :nrepl-middleware [cemerick.piggieback/wrap-cljs-repl]}}}
   :aliases {"test" ["do" ["clean"] ["test"] ["doo" "phantom" "test" "once"]]
