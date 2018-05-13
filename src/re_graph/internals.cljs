@@ -124,9 +124,10 @@
    (.close ws)))
 
 (defn default-ws-url []
-  (let [host-and-port (.-host js/window.location)
-        ssl? (re-find #"^https" (.-origin js/window.location))]
-    (str (if ssl? "wss" "ws") "://" host-and-port "/graphql-ws")))
+  (when (exists? (.-location js/window))
+    (let [host-and-port (.-host js/window.location)
+          ssl? (re-find #"^https" (.-origin js/window.location))]
+      (str (if ssl? "wss" "ws") "://" host-and-port "/graphql-ws"))))
 
 (defn generate-query-id []
   (.substr (.toString (js/Math.random) 36) 2 8))
