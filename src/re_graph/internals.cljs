@@ -4,11 +4,36 @@
             [cljs.core.async :as a])
   (:require-macros [cljs.core.async.macros :refer [go]]))
 
+(defn- valid-graphql-errors?
+  "Validates that response has a valid GraphQL errors map"
+  [response]
+  (and (map? response)
+       (vector? (:errors response))
+       (seq (:errors response))
+       (every? map? (:errors response))))
+
+(defn- insert-http-status
+  "Inserts the HTTP status into the response for 3 conditions:
+   1. Response contains a valid GraphQL errors map: update the map with HTTP status
+   2. Response is a map but does not contain a valid errors map: merge in default errors
+   3. Response is anything else: return default errors map"
+  [response status]
+  (let [f (fn [errors] (mapv #(assoc-in % [:extensions :status] status) errors))
+        default-errors {:errors [{:message "The HTTP call failed."
+                                  :extensions {:status status}}]}]
+    (cond
+      (valid-graphql-errors? response) (update response :errors f)
+      (map? response) (merge response default-errors)
+      :else default-errors)))
+
 (re-frame/reg-fx
  ::send-http
  (fn [[http-url {:keys [request payload]} callback-fn]]
-   (go (let [response (a/<! (http/post http-url (assoc request :json-params payload)))]
-         (callback-fn (:body response))))))
+   (go (let [response (a/<! (http/post http-url (assoc request :json-params payload)))
+             {:keys [status error-code]} response]
+         (if (= :no-error error-code)
+           (callback-fn (:body response))
+           (callback-fn (insert-http-status (:body response) status)))))))
 
 (re-frame/reg-fx
  ::send-ws

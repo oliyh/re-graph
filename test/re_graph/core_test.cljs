@@ -261,6 +261,78 @@
            (is (= expected-response-payload
                   (::thing @app-db)))))))))
 
+(deftest http-query-error-test
+  (run-test-sync
+   (let [mock-response (atom {})
+         query "{ things { id } }"
+         variables {:some "variable"}]
+     (re-frame/dispatch [::re-graph/init {:http-url "http://foo.bar/graph-ql"
+                                          :ws-url nil}])
+
+     (re-frame/reg-fx
+      ::internals/send-http
+      (fn [[_ _ callback-fn]]
+        (let [response @mock-response
+              {:keys [status error-code]} response]
+          (if (= :no-error error-code)
+            (callback-fn (:body response))
+            (callback-fn (re-graph.internals/insert-http-status (:body response) status))))))
+
+     (re-frame/reg-event-db
+      ::on-thing
+      (fn [db [_ payload]]
+        (assoc db ::thing payload)))
+
+     (testing "Query error with invalid graphql response (string body)"
+       (reset! mock-response {:status 403
+                              :body "Access Token is invalid"
+                              :error-code :http-error})
+       (let [expected-response-payload {:errors [{:message "The HTTP call failed.",
+                                                  :extensions {:status 403}}]}]
+         (re-frame/dispatch [::re-graph/query query variables [::on-thing]])
+         (is (= expected-response-payload
+                (::thing @app-db)))))
+
+     (testing "Query error with invalid graphql response (map body)"
+       (reset! mock-response {:status 403
+                              :body {:data nil
+                                     :errors nil}
+                              :error-code :http-error})
+       (let [expected-response-payload {:data nil
+                                        :errors [{:message "The HTTP call failed.",
+                                                  :extensions {:status 403}}]}]
+         (re-frame/dispatch [::re-graph/query query variables [::on-thing]])
+         (is (= expected-response-payload
+                (::thing @app-db)))))
+
+     (testing "Query error with valid graphql error response"
+       (reset! mock-response {:status 400
+                              :body {:errors [{:message "Bad field \"bad1\".",
+                                               :locations [{:line 2, :column 0}]}
+                                              {:message "Unknown argument \"limit\"."
+                                               :locations [{:line 2, :column 0}]
+                                               :extensions {:errcode 999}}]}
+                              :error-code :http-error})
+       (let [expected-response-payload {:errors [{:message "Bad field \"bad1\"."
+                                                  :locations [{:line 2, :column 0}]
+                                                  :extensions {:status 400}}
+                                                 {:message "Unknown argument \"limit\"."
+                                                  :locations [{:line 2, :column 0}]
+                                                  :extensions {:errcode 999
+                                                               :status 400}}]}]
+         (re-frame/dispatch [::re-graph/query query variables [::on-thing]])
+         (is (= expected-response-payload
+                (::thing @app-db)))))
+
+     (testing "No query error, body unchanged"
+       (let [expected-response-payload {:data {:things [{:id 1} {:id 2}]}}]
+         (reset! mock-response {:status 200
+                                :body expected-response-payload
+                                :error-code :no-error})
+         (re-frame/dispatch [::re-graph/query query variables [::on-thing]])
+         (is (= expected-response-payload
+                (::thing @app-db))))))))
+
 (deftest http-mutation-test
   (run-test-sync
    (let [expected-http-url "http://foo.bar/graph-ql"]
