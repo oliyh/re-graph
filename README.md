@@ -13,6 +13,7 @@ Features include:
 * Works with Apollo-compatible servers like lacinia-pedestal
 * Queues websocket messages until ready
 * Websocket reconnects on disconnect
+* Simultaneous connection to multiple GraphQL services
 
 ## Usage
 
@@ -97,6 +98,45 @@ Options can be passed to the init event, with the following possibilities:
      :resume-subscriptions?   true                      ;; start existing subscriptions again when websocket is reconnected after a disconnect
      :connection-init-payload {}                        ;; the payload to send in the connection_init message, sent when a websocket connection is made
   }])
+```
+
+### Multiple instances
+
+re-graph now supports multiple instances, allowing you to connect to multiple GraphQL services at the same time.
+All function/event signatures now take an optional instance-name as the first argument to let you address them separately:
+
+```clojure
+(require [re-graph.core :as re-graph])
+
+;; initialise re-graph for service A
+(re-graph/init :service-a {:ws-url "wss://a.com/graphql-ws})
+
+;; initialise re-graph for service B
+(re-graph/init :service-b {:ws-url "wss://b.net/api/graphql-ws})
+
+(defn on-a-thing [{:keys [data errors] :as payload}]
+  ;; do things with data from service A
+))
+
+;; subscribe to service A, events will be sent to the on-a-thing callback
+(re-graph/subscribe :service-a           ;; the instance-name you want to talk to
+                    :my-subscription-id  ;; this id should uniquely identify this subscription for this service
+                    "{ things { a } }"
+                    on-a-thing)
+
+(defn on-b-thing [{:keys [data errors] :as payload}]
+  ;; do things with data from service B
+))
+
+;; subscribe to service B, events will be sent to the on-b-thing callback
+(re-graph/subscribe :service-b           ;; the instance-name you want to talk to
+                    :my-subscription-id
+                    "{ things { b } }"
+                    on-b-thing)
+
+;; stop the subscriptions
+(re-graph/unsubscribe :service-a :my-subscription-id)
+(re-graph/unsubscribe :service-b :my-subscription-id)
 ```
 
 ## Development
