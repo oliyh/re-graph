@@ -1,6 +1,6 @@
 (ns re-graph.core
   (:require [re-frame.core :as re-frame]
-            [re-graph.internals :as internals :refer [interceptors]]
+            [re-graph.internals :as internals :refer [interceptors default-instance-name]]
             [re-frame.std-interceptors :as rfi]
             [clojure.string :as string]))
 
@@ -31,7 +31,7 @@
                                  (re-frame/dispatch (conj callback-event payload)))]}))))
 
 (defn mutate
-  ([query variables callback-fn] (query :default variables callback-fn))
+  ([query variables callback-fn] (query default-instance-name variables callback-fn))
   ([instance-name query variables callback-fn]
    (re-frame/dispatch [::mutate query variables [::internals/callback callback-fn]])))
 
@@ -62,7 +62,7 @@
                                  (re-frame/dispatch (conj callback-event payload)))]}))))
 
 (defn query
-  ([query variables callback-fn] (query :default query variables callback-fn))
+  ([query variables callback-fn] (query default-instance-name query variables callback-fn))
   ([instance-name query variables callback-fn]
    (re-frame/dispatch [::query query variables [::internals/callback callback-fn]])))
 
@@ -91,7 +91,7 @@
      (js/console.error "Websocket is not enabled, subscriptions are not possible. Please check your re-graph configuration"))))
 
 (defn subscribe
-  ([subscription-id query variables callback-fn] (subscribe :default subscription-id query variables callback-fn))
+  ([subscription-id query variables callback-fn] (subscribe default-instance-name subscription-id query variables callback-fn))
   ([instance-name subscription-id query variables callback-fn]
    (re-frame/dispatch [::subscribe instance-name subscription-id query variables [::internals/callback callback-fn]])))
 
@@ -108,36 +108,35 @@
      {:db (update-in db [:websocket :queue] conj [::unsubscribe instance-name subscription-id])})))
 
 (defn unsubscribe
-  ([subscription-id] (unsubscribe :default subscription-id))
+  ([subscription-id] (unsubscribe default-instance-name subscription-id))
   ([instance-name subscription-id]
    (re-frame/dispatch [::unsubscribe instance-name subscription-id])))
 
 (re-frame/reg-event-fx
  ::init
- (fn [{:keys [db]} [_ {:keys [instance-name ws-url http-url http-parameters ws-reconnect-timeout resume-subscriptions? connection-init-payload]
-                       :or {instance-name :default
-                            ws-url (internals/default-ws-url)
+ (fn [{:keys [db]} [_ instance-name {:keys [ws-url http-url http-parameters ws-reconnect-timeout resume-subscriptions? connection-init-payload]
+                       :or {ws-url (internals/default-ws-url)
                             http-parameters {}
                             http-url "/graphql"
                             ws-reconnect-timeout 5000
                             connection-init-payload {}
                             resume-subscriptions? true}}]]
-
-   (merge
-    {:db (assoc-in db [:re-graph instance-name]
-                   (merge
-                    (when ws-url
-                      {:websocket {:url ws-url
-                                   :ready? false
-                                   :connection-init-payload connection-init-payload
-                                   :queue []
-                                   :reconnect-timeout ws-reconnect-timeout
-                                   :resume-subscriptions? resume-subscriptions?}})
-                    (when http-url
-                      {:http-url http-url
-                       :http-parameters http-parameters})))}
-    (when ws-url
-      {::internals/connect-ws [instance-name ws-url]}))))
+   (let [instance-name (or instance-name default-instance-name)]
+     (merge
+      {:db (assoc-in db [:re-graph instance-name]
+                     (merge
+                      (when ws-url
+                        {:websocket {:url ws-url
+                                     :ready? false
+                                     :connection-init-payload connection-init-payload
+                                     :queue []
+                                     :reconnect-timeout ws-reconnect-timeout
+                                     :resume-subscriptions? resume-subscriptions?}})
+                      (when http-url
+                        {:http-url http-url
+                         :http-parameters http-parameters})))}
+      (when ws-url
+        {::internals/connect-ws [instance-name ws-url]})))))
 
 (re-frame/reg-event-fx
  ::destroy
@@ -154,11 +153,11 @@
         {::internals/disconnect-ws [ws]})))))
 
 (defn init
-  ([opts] (init :default opts))
+  ([opts] (init default-instance-name opts))
   ([instance-name opts]
-   (re-frame/dispatch [::init (assoc opts :instance-name instance-name)])))
+   (re-frame/dispatch [::init instance-name opts])))
 
 (defn destroy
-  ([] (destroy :default))
+  ([] (destroy default-instance-name))
   ([instance-name]
    (re-frame/dispatch [::destroy instance-name])))

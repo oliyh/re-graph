@@ -7,6 +7,8 @@
             [cljs.core.async :as a])
   (:require-macros [cljs.core.async.macros :refer [go]]))
 
+(def default-instance-name ::default)
+
 (defn- cons-interceptor [ctx interceptor]
   (update ctx :queue #(into (into empty-queue [interceptor]) %)))
 
@@ -17,11 +19,10 @@
              (let [re-graph  (:re-graph (get-coeffect ctx :db))
                    event (get-coeffect ctx :event)
                    provided-instance-name (first event)
-                   instance-name (if (contains? re-graph provided-instance-name) provided-instance-name :default)
+                   instance-name (if (contains? re-graph provided-instance-name) provided-instance-name default-instance-name)
                    instance (get re-graph instance-name)
                    event-name (first (get-coeffect ctx ::rfi/untrimmed-event))
                    trimmed-event (if (= provided-instance-name instance-name) (subvec event 1) event)]
-;;               (js/console.log "Before: " ctx)
                (if instance
                  (-> ctx
                      (assoc-coeffect :instance instance)
@@ -32,13 +33,8 @@
 
                  (do (js/console.error "No default instance of re-graph found but no valid instance name was provided. Valid instance names are:" (keys re-graph)
                                        "but was provided with" provided-instance-name
-                                       "handling event" event-name
-                                       (get-coeffect ctx ::rfi/untrimmed-event)
-                                       (get-coeffect ctx :db))
-                     ctx))))
-   :after (fn [ctx]
-;;            (js/console.log "After" ctx)
-            ctx)))
+                                       "handling event" event-name)
+                     ctx))))))
 
 (def interceptors
   [re-frame/trim-v re-graph-instance])
