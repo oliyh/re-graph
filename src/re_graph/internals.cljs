@@ -15,20 +15,30 @@
    :id ::instance
    :before (fn [ctx]
              (let [re-graph  (:re-graph (get-coeffect ctx :db))
-                   provided-instance-name (first (get-coeffect ctx :event))
+                   event (get-coeffect ctx :event)
+                   provided-instance-name (first event)
                    instance-name (if (contains? re-graph provided-instance-name) provided-instance-name :default)
-                   instance (get re-graph instance-name)]
+                   instance (get re-graph instance-name)
+                   event-name (first (get-coeffect ctx ::rfi/untrimmed-event))
+                   trimmed-event (if (= provided-instance-name instance-name) (subvec event 1) event)]
+;;               (js/console.log "Before: " ctx)
                (if instance
-                 (cond-> ctx
-                   :always (assoc-coeffect :instance instance)
-                   :always (assoc-coeffect :instance-name instance-name)
-                   :always (cons-interceptor (rfi/path :re-graph instance-name))
-                   (= provided-instance-name instance-name) (update-coeffect :event subvec 1))
+                 (-> ctx
+                     (assoc-coeffect :instance instance)
+                     (assoc-coeffect :instance-name instance-name)
+                     (assoc-coeffect :dispatchable-event (into [event-name instance-name] trimmed-event))
+                     (cons-interceptor (rfi/path :re-graph instance-name))
+                     (assoc-coeffect :event trimmed-event))
 
                  (do (js/console.error "No default instance of re-graph found but no valid instance name was provided. Valid instance names are:" (keys re-graph)
                                        "but was provided with" provided-instance-name
-                                       "handling event" (first (get-coeffect ctx ::rfi/untrimmed-event)))
-                     ctx))))))
+                                       "handling event" event-name
+                                       (get-coeffect ctx ::rfi/untrimmed-event)
+                                       (get-coeffect ctx :db))
+                     ctx))))
+   :after (fn [ctx]
+;;            (js/console.log "After" ctx)
+            ctx)))
 
 (def interceptors
   [re-frame/trim-v re-graph-instance])
@@ -76,15 +86,13 @@
 
 (re-frame/reg-event-fx
  ::callback
- interceptors
- (fn [_ [callback-fn payload]]
+ (fn [_ [_ callback-fn payload]]
    {::call-callback [callback-fn payload]}))
 
 (re-frame/reg-event-fx
  ::on-ws-data
  interceptors
  (fn [{:keys [db] :as cofx} [subscription-id payload :as event]]
-   (js/console.log "ws data cofx" cofx event)
    (if-let [callback-event (get-in db [:subscriptions (name subscription-id) :callback])]
      {:dispatch (conj callback-event payload)}
      (js/console.debug "No callback-event found for subscription" subscription-id))))
@@ -120,7 +128,6 @@
           subscriptions (when resume? (->> db :subscriptions vals (map :event)))
           queue (get-in db [:websocket :queue])
           to-send (concat [[::connection-init instance-name]] subscriptions queue)]
-      (js/console.log "To send:" to-send)
       {:dispatch-n to-send}))))
 
 (defn- deactivate-subscriptions [subscriptions]
@@ -134,9 +141,10 @@
  interceptors
  (fn [{:keys [db instance-name]}]
    (merge
-    {:db (-> db
-             (assoc-in [:websocket :ready?] false)
-             (update :subscriptions deactivate-subscriptions))}
+    {:db (let [new-db (-> db
+                          (assoc-in [:websocket :ready?] false)
+                          (update :subscriptions deactivate-subscriptions))]
+           new-db)}
     (when-let [reconnect-timeout (get-in db [:websocket :reconnect-timeout])]
       {:dispatch-later [{:ms reconnect-timeout
                          :dispatch [::reconnect-ws instance-name]}]}))))

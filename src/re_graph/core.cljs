@@ -7,31 +7,31 @@
 (re-frame/reg-event-fx
  ::mutate
  interceptors
- (fn [{:keys [db]} [query variables callback-event :as event]]
+ (fn [{:keys [db dispatchable-event]} [query variables callback-event :as event]]
    (let [query (str "mutation " (string/replace query #"^mutation\s?" ""))]
      (cond
-       (get-in db [:re-graph :websocket :ready?])
+       (get-in db [:websocket :ready?])
        (let [query-id (internals/generate-query-id)]
-         {:db (assoc-in db [:re-graph :subscriptions query-id] {:callback callback-event})
-          ::internals/send-ws [(get-in db [:re-graph :websocket :connection])
+         {:db (assoc-in db [:subscriptions query-id] {:callback callback-event})
+          ::internals/send-ws [(get-in db [:websocket :connection])
                                {:id query-id
                                 :type "start"
                                 :payload {:query query
                                           :variables variables}}]})
 
-       (get-in db [:re-graph :websocket])
-       {:db (update-in db [:re-graph :websocket :queue] conj event)}
+       (:websocket db)
+       {:db (update-in db [:websocket :queue] conj dispatchable-event)}
 
        :else
-       {::internals/send-http [(get-in db [:re-graph :http-url])
-                               {:request (get-in db [:re-graph :http-parameters])
+       {::internals/send-http [(:http-url db)
+                               {:request (:http-parameters db)
                                 :payload {:query query
                                           :variables variables}}
                                (fn [payload]
                                  (re-frame/dispatch (conj callback-event payload)))]}))))
 
 (defn mutate
-  ([query variables callback-fn] (query nil variables callback-fn))
+  ([query variables callback-fn] (query :default variables callback-fn))
   ([instance-name query variables callback-fn]
    (re-frame/dispatch [::mutate query variables [::internals/callback callback-fn]])))
 
@@ -41,42 +41,43 @@
  (fn [{:keys [db]} [query variables callback-event :as event]]
    (let [query (str "query " (string/replace query #"^query\s?" ""))]
      (cond
-       (get-in db [:re-graph :websocket :ready?])
+       (get-in db [:websocket :ready?])
        (let [query-id (internals/generate-query-id)]
-         {:db (assoc-in db [:re-graph :subscriptions query-id] {:callback callback-event})
-          ::internals/send-ws [(get-in db [:re-graph :websocket :connection])
+         {:db (assoc-in db [:subscriptions query-id] {:callback callback-event})
+          ::internals/send-ws [(get-in db [:websocket :connection])
                                {:id query-id
                                 :type "start"
                                 :payload {:query query
                                           :variables variables}}]})
 
-       (get-in db [:re-graph :websocket])
-       {:db (update-in db [:re-graph :websocket :queue] conj event)}
+       (get-in db [:websocket])
+       {:db (update-in db [:websocket :queue] conj event)}
 
        :else
-       {::internals/send-http [(get-in db [:re-graph :http-url])
-                               {:request (get-in db [:re-graph :http-parameters])
+       {::internals/send-http [(:http-url db)
+                               {:request (:http-parameters db)
                                 :payload {:query query
                                           :variables variables}}
                                (fn [payload]
                                  (re-frame/dispatch (conj callback-event payload)))]}))))
 
 (defn query
-  ([query variables callback-fn] (query nil query variables callback-fn))
+  ([query variables callback-fn] (query :default query variables callback-fn))
   ([instance-name query variables callback-fn]
    (re-frame/dispatch [::query query variables [::internals/callback callback-fn]])))
 
 (re-frame/reg-event-fx
  ::subscribe
  interceptors
- (fn [{:keys [db instance-name ::rfi/untrimmed-event] :as cofx} [subscription-id query variables callback-event :as event]]
+ (fn [{:keys [db instance-name dispatchable-event] :as cofx} [subscription-id query variables callback-event :as event]]
+   (js.console.log "Subscribing with" instance-name dispatchable-event event)
    (cond
      (get-in db [:subscriptions (name subscription-id) :active?])
      {} ;; duplicate subscription
 
      (get-in db [:websocket :ready?])
      {:db (assoc-in db [:subscriptions (name subscription-id)] {:callback callback-event
-                                                                :event event
+                                                                :event dispatchable-event
                                                                 :active? true})
       ::internals/send-ws [(get-in db [:websocket :connection])
                            {:id (name subscription-id)
@@ -85,30 +86,31 @@
                                       :variables variables}}]}
 
      (:websocket db)
-     {:db (update-in db [:websocket :queue] conj (into [(first untrimmed-event) instance-name] event))}
+     {:db (update-in db [:websocket :queue] conj dispatchable-event)}
 
      :else
      (js/console.error "Websocket is not enabled, subscriptions are not possible. Please check your re-graph configuration"))))
 
 (defn subscribe
-  ([subscription-id query variables callback-fn] (subscribe nil subscription-id query variables callback-fn))
+  ([subscription-id query variables callback-fn] (subscribe :default subscription-id query variables callback-fn))
   ([instance-name subscription-id query variables callback-fn]
-   (re-frame/dispatch [::subscribe subscription-id query variables [::internals/callback callback-fn]])))
+   (re-frame/dispatch [::subscribe instance-name subscription-id query variables [::internals/callback callback-fn]])))
 
 (re-frame/reg-event-fx
  ::unsubscribe
  interceptors
- (fn [{:keys [db]} [subscription-id]]
+ (fn [{:keys [db instance-name]} [subscription-id :as event]]
+   (js/console.log instance-name event)
    (if (get-in db [:websocket :ready?])
-     {:db (update-in db [:subscriptions] dissoc (name subscription-id))
+     {:db (update db :subscriptions dissoc (name subscription-id))
       ::internals/send-ws [(get-in db [:websocket :connection])
                            {:id (name subscription-id)
                             :type "stop"}]}
 
-     {:db (update-in db [:websocket :queue] conj [::unsubscribe subscription-id])})))
+     {:db (update-in db [:websocket :queue] conj [::unsubscribe instance-name subscription-id])})))
 
 (defn unsubscribe
-  ([subscription-id] (unsubscribe nil subscription-id))
+  ([subscription-id] (unsubscribe :default subscription-id))
   ([instance-name subscription-id]
    (re-frame/dispatch [::unsubscribe instance-name subscription-id])))
 
@@ -153,8 +155,12 @@
       (when-let [ws (get-in db [:websocket :connection])]
         {::internals/disconnect-ws [ws]})))))
 
-(defn init [& [args]]
-  (re-frame/dispatch [::init args]))
+(defn init
+  ([opts] (init :default opts))
+  ([instance-name opts]
+   (re-frame/dispatch [::init (assoc opts :instance-name instance-name)])))
 
-(defn destroy [& [instance-name]]
-  (re-frame/dispatch [::destroy instance-name]))
+(defn destroy
+  ([] (destroy :default))
+  ([instance-name]
+   (re-frame/dispatch [::destroy instance-name])))
