@@ -10,11 +10,11 @@
 (def on-ws-message @#'internals/on-ws-message)
 (def on-open @#'internals/on-open)
 (def on-close @#'internals/on-close)
+(def insert-http-status @#'internals/insert-http-status)
 
 (re-frame/reg-fx
  ::internals/connect-ws
  (fn [[instance-name & args]]
-   (js/console.log "Stub connection for" instance-name)
    ((on-open instance-name ::websocket-connection))))
 
 (defn- prepend-instance-name [instance-name [event-name & args :as event]]
@@ -174,7 +174,7 @@
 #_(defn- run-websocket-reconnection-test [instance-name]
   )
 
-#_(deftest websocket-reconnection-test
+(deftest websocket-reconnection-test
   (let [instance-name nil
         dispatch (partial dispatch-to-instance instance-name)
         db-instance #(get-in @app-db [:re-graph (or instance-name :default)])
@@ -210,7 +210,6 @@
           (wait-for
            [::internals/on-ws-close]
            (is (false? (get-in (db-instance) [:websocket :ready?])))
-           (js/console.log "The websocket was closed")
 
            (testing "websocket is reconnected"
              (wait-for [::internals/on-ws-open]
@@ -219,7 +218,7 @@
                        (testing "subscriptions are resumed"
                          (wait-for
                           [(fn [event]
-                             (= subscription-registration event))]
+                             (= (prepend-instance-name (or instance-name :default) subscription-registration) event))]
                           ;; 2 connection_init
                           ;; 2 subscription
                           (is (= 4 @sent-msgs))))))))))))
@@ -335,7 +334,7 @@
                 {:keys [status error-code]} response]
             (if (= :no-error error-code)
               (callback-fn (:body response))
-              (callback-fn (re-graph.internals/insert-http-status (:body response) status))))))
+              (callback-fn (insert-http-status (:body response) status))))))
 
        (re-frame/reg-event-db
         ::on-thing

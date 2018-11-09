@@ -70,7 +70,6 @@
  ::subscribe
  interceptors
  (fn [{:keys [db instance-name dispatchable-event] :as cofx} [subscription-id query variables callback-event :as event]]
-   (js.console.log "Subscribing with" instance-name dispatchable-event event)
    (cond
      (get-in db [:subscriptions (name subscription-id) :active?])
      {} ;; duplicate subscription
@@ -100,7 +99,6 @@
  ::unsubscribe
  interceptors
  (fn [{:keys [db instance-name]} [subscription-id :as event]]
-   (js/console.log instance-name event)
    (if (get-in db [:websocket :ready?])
      {:db (update db :subscriptions dissoc (name subscription-id))
       ::internals/send-ws [(get-in db [:websocket :connection])

@@ -11,13 +11,13 @@
                   ["change" "version" "leiningen.release/bump-version"]
                   ["vcs" "commit"]
                   ["vcs" "push"]]
-  :dependencies [[re-frame "0.10.5"]
+  :dependencies [[re-frame "0.10.6"]
                  [cljs-http "0.1.45"]]
   :plugins [[lein-cljsbuild "1.1.7"]
-            [lein-doo "0.1.8"]
+            [lein-doo "0.1.10"]
             [lein-figwheel "0.5.14"]]
   :profiles {:provided {:dependencies [[org.clojure/clojure "1.9.0"]
-                                       [org.clojure/clojurescript "1.10.238"]]}
+                                       [org.clojure/clojurescript "1.10.439"]]}
              :dev {:source-paths ["dev"]
                    :resource-paths ["dev-resources"]
                    :exclusions [[org.clojure/tools.reader]]
