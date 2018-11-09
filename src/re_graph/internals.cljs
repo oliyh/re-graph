@@ -1,8 +1,37 @@
 (ns re-graph.internals
   (:require [re-frame.core :as re-frame]
+            [re-frame.interceptor :refer [->interceptor get-coeffect assoc-coeffect update-coeffect enqueue]]
+            [re-frame.std-interceptors :as rfi]
+            [re-frame.interop :refer [empty-queue]]
             [cljs-http.client :as http]
             [cljs.core.async :as a])
   (:require-macros [cljs.core.async.macros :refer [go]]))
+
+(defn- cons-interceptor [ctx interceptor]
+  (update ctx :queue #(into (into empty-queue [interceptor]) %)))
+
+(def re-graph-instance
+  (->interceptor
+   :id ::instance
+   :before (fn [ctx]
+             (let [re-graph  (:re-graph (get-coeffect ctx :db))
+                   provided-instance-name (first (get-coeffect ctx :event))
+                   instance-name (if (contains? re-graph provided-instance-name) provided-instance-name :default)
+                   instance (get re-graph instance-name)]
+               (if instance
+                 (cond-> ctx
+                   :always (assoc-coeffect :instance instance)
+                   :always (assoc-coeffect :instance-name instance-name)
+                   :always (cons-interceptor (rfi/path :re-graph instance-name))
+                   (= provided-instance-name instance-name) (update-coeffect :event subvec 1))
+
+                 (do (js/console.error "No default instance of re-graph found but no valid instance name was provided. Valid instance names are:" (keys re-graph)
+                                       "but was provided with" provided-instance-name
+                                       "handling event" (first (get-coeffect ctx ::rfi/untrimmed-event)))
+                     ctx))))))
+
+(def interceptors
+  [re-frame/trim-v re-graph-instance])
 
 (defn- valid-graphql-errors?
   "Validates that response has a valid GraphQL errors map"
@@ -47,44 +76,51 @@
 
 (re-frame/reg-event-fx
  ::callback
- (fn [_ [_ callback-fn payload]]
+ interceptors
+ (fn [_ [callback-fn payload]]
    {::call-callback [callback-fn payload]}))
 
 (re-frame/reg-event-fx
  ::on-ws-data
- (fn [{:keys [db]} [_ subscription-id payload]]
-   (if-let [callback-event (get-in db [:re-graph :subscriptions (name subscription-id) :callback])]
+ interceptors
+ (fn [{:keys [db] :as cofx} [subscription-id payload :as event]]
+   (js/console.log "ws data cofx" cofx event)
+   (if-let [callback-event (get-in db [:subscriptions (name subscription-id) :callback])]
      {:dispatch (conj callback-event payload)}
      (js/console.debug "No callback-event found for subscription" subscription-id))))
 
 (re-frame/reg-event-db
  ::on-ws-complete
- (fn [db [_ subscription-id]]
-   (update-in db [:re-graph :subscriptions] dissoc (name subscription-id))))
+ interceptors
+ (fn [db [subscription-id]]
+   (update-in db [:subscriptions] dissoc (name subscription-id))))
 
 (re-frame/reg-event-fx
-  ::connection-init
+ ::connection-init
+ interceptors
   (fn [{:keys [db]} _]
-    (let [ws (get-in db [:re-graph :websocket :connection])
-          payload (get-in db [:re-graph :websocket :connection-init-payload])]
+    (let [ws (get-in db [:websocket :connection])
+          payload (get-in db [:websocket :connection-init-payload])]
       (when payload
         {::send-ws [ws {:type "connection_init"
                         :payload payload}]}))))
 
 (re-frame/reg-event-fx
  ::on-ws-open
- (fn [{:keys [db]} [_ ws]]
+ interceptors
+ (fn [{:keys [db instance-name]} [ws]]
    (merge
-    {:db (update-in db [:re-graph :websocket]
+    {:db (update db :websocket
                     assoc
                     :connection ws
                     :ready? true
                     :queue [])}
 
-    (let [resume? (get-in db [:re-graph :websocket :resume-subscriptions?])
-          subscriptions (when resume? (->> db :re-graph :subscriptions vals (map :event)))
-          queue (get-in db [:re-graph :websocket :queue])
-          to-send (concat [[::connection-init]] subscriptions queue)]
+    (let [resume? (get-in db [:websocket :resume-subscriptions?])
+          subscriptions (when resume? (->> db :subscriptions vals (map :event)))
+          queue (get-in db [:websocket :queue])
+          to-send (concat [[::connection-init instance-name]] subscriptions queue)]
+      (js/console.log "To send:" to-send)
       {:dispatch-n to-send}))))
 
 (defn- deactivate-subscriptions [subscriptions]
@@ -95,53 +131,58 @@
 
 (re-frame/reg-event-fx
  ::on-ws-close
- (fn [{:keys [db]}]
+ interceptors
+ (fn [{:keys [db instance-name]}]
    (merge
     {:db (-> db
-             (assoc-in [:re-graph :websocket :ready?] false)
-             (update-in [:re-graph :subscriptions] deactivate-subscriptions))}
-    (when-let [reconnect-timeout (get-in db [:re-graph :websocket :reconnect-timeout])]
+             (assoc-in [:websocket :ready?] false)
+             (update :subscriptions deactivate-subscriptions))}
+    (when-let [reconnect-timeout (get-in db [:websocket :reconnect-timeout])]
       {:dispatch-later [{:ms reconnect-timeout
-                         :dispatch [::reconnect-ws]}]}))))
+                         :dispatch [::reconnect-ws instance-name]}]}))))
 
-(defn- on-ws-message [m]
-  (let [data (js/JSON.parse (aget m "data"))]
-    (condp = (aget data "type")
-      "data"
-      (re-frame/dispatch [::on-ws-data (aget data "id") (js->clj (aget data "payload") :keywordize-keys true)])
+(defn- on-ws-message [instance-name]
+  (fn [m]
+    (let [data (js/JSON.parse (aget m "data"))]
+      (condp = (aget data "type")
+        "data"
+        (re-frame/dispatch [::on-ws-data instance-name (aget data "id") (js->clj (aget data "payload") :keywordize-keys true)])
 
-      "complete"
-      (re-frame/dispatch [::on-ws-complete (aget data "id")])
+        "complete"
+        (re-frame/dispatch [::on-ws-complete instance-name (aget data "id")])
 
-      "error"
-      (js/console.warn (str "GraphQL error for " (aget data "id") ": " (aget data "payload" "message")))
+        "error"
+        (js/console.warn (str "GraphQL error for " instance-name " - " (aget data "id") ": " (aget data "payload" "message")))
 
-      (js/console.debug "Ignoring graphql-ws event" (aget data "type")))))
+        (js/console.debug "Ignoring graphql-ws event " instance-name " - " (aget data "type"))))))
 
-(defn- on-open [ws]
+(defn- on-open [instance-name ws]
   (fn [e]
-    (re-frame/dispatch [::on-ws-open ws])))
+    (re-frame/dispatch [::on-ws-open instance-name ws])))
 
-(defn- on-close [e]
-  (re-frame/dispatch [::on-ws-close]))
+(defn- on-close [instance-name]
+  (fn [e]
+    (re-frame/dispatch [::on-ws-close instance-name])))
 
-(defn- on-error [e]
-  (js/console.warn "GraphQL websocket error" e))
+(defn- on-error [instance-name]
+  (fn [e]
+    (js/console.warn "GraphQL websocket error" instance-name e)))
 
 (re-frame/reg-event-fx
  ::reconnect-ws
- (fn [{:keys [db]}]
-   (when-not (get-in db [:re-graph :websocket :ready?])
-     {::connect-ws [(get-in db [:re-graph :websocket :url])]})))
+ interceptors
+ (fn [{:keys [db instance-name]}]
+   (when-not (get-in db [:websocket :ready?])
+     {::connect-ws [instance-name (get-in db [:websocket :url])]})))
 
 (re-frame/reg-fx
  ::connect-ws
- (fn [[ws-url]]
+ (fn [[instance-name ws-url]]
    (let [ws (js/WebSocket. ws-url "graphql-ws")]
-     (aset ws "onmessage" on-ws-message)
-     (aset ws "onopen" (on-open ws))
-     (aset ws "onclose" on-close)
-     (aset ws "onerror" on-error))))
+     (aset ws "onmessage" (on-ws-message instance-name))
+     (aset ws "onopen" (on-open instance-name ws))
+     (aset ws "onclose" (on-close instance-name))
+     (aset ws "onerror" (on-error instance-name)))))
 
 (re-frame/reg-fx
  ::disconnect-ws
