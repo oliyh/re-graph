@@ -90,8 +90,8 @@
      :else
      (js/console.error
        (str
-         "Error creating subscription"
-         subscription-id
+        "Error creating subscription " subscription-id
+        " on instance " instance-name
          ": Websocket is not enabled, subscriptions are not possible. Please check your re-graph configuration")))))
 
 (defn subscribe
