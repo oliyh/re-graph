@@ -118,14 +118,27 @@
 
 (re-frame/reg-event-fx
  ::init
- (fn [{:keys [db]} [_ instance-name {:keys [ws-url http-url http-parameters ws-reconnect-timeout resume-subscriptions? connection-init-payload]
-                       :or {ws-url (internals/default-ws-url)
-                            http-parameters {}
-                            http-url "/graphql"
-                            ws-reconnect-timeout 5000
-                            connection-init-payload {}
-                            resume-subscriptions? true}}]]
-   (let [instance-name (or instance-name default-instance-name)]
+ (fn [{:keys [db]} [_ instance-name opts]]
+   (let [[instance-name opts] (cond
+                                (and (nil? instance-name) (nil? opts))
+                                [default-instance-name {}]
+
+                                (map? instance-name)
+                                [default-instance-name instance-name]
+
+                                (nil? instance-name)
+                                [default-instance-name opts]
+
+                                :else
+                                [instance-name opts])
+         {:keys [ws-url http-url http-parameters ws-reconnect-timeout resume-subscriptions? connection-init-payload]
+          :or {ws-url (internals/default-ws-url)
+               http-parameters {}
+               http-url "/graphql"
+               ws-reconnect-timeout 5000
+               connection-init-payload {}
+               resume-subscriptions? true}} opts]
+
      (merge
       {:db (assoc-in db [:re-graph instance-name]
                      (merge

@@ -26,7 +26,9 @@
   (re-frame/dispatch (prepend-instance-name instance-name event)))
 
 (defn- init [instance-name opts]
-  (re-frame/dispatch [::re-graph/init instance-name opts]))
+  (if (nil? instance-name)
+    (re-frame/dispatch [::re-graph/init opts])
+    (re-frame/dispatch [::re-graph/init instance-name opts])))
 
 (defn- run-subscription-test [instance-name]
   (let [dispatch (partial dispatch-to-instance instance-name)
