@@ -31,7 +31,7 @@
                                  (re-frame/dispatch (conj callback-event payload)))]}))))
 
 (defn mutate
-  ([query variables callback-fn] (query default-instance-name variables callback-fn))
+  ([query variables callback-fn] (mutate default-instance-name query variables callback-fn))
   ([instance-name query variables callback-fn]
    (re-frame/dispatch [::mutate query variables [::internals/callback callback-fn]])))
 
@@ -62,9 +62,9 @@
                                  (re-frame/dispatch (conj callback-event payload)))]}))))
 
 (defn query
-  ([query variables callback-fn] (query default-instance-name query variables callback-fn))
-  ([instance-name query variables callback-fn]
-   (re-frame/dispatch [::query query variables [::internals/callback callback-fn]])))
+  ([query-string variables callback-fn] (query default-instance-name query-string variables callback-fn))
+  ([instance-name query-string variables callback-fn]
+   (re-frame/dispatch [::query query-string variables [::internals/callback callback-fn]])))
 
 (re-frame/reg-event-fx
  ::subscribe
