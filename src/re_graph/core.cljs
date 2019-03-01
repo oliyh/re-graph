@@ -38,7 +38,7 @@
 (re-frame/reg-event-fx
  ::query
  interceptors
- (fn [{:keys [db]} [query variables callback-event :as event]]
+ (fn [{:keys [db dispatchable-event]} [query variables callback-event :as event]]
    (let [query (str "query " (string/replace query #"^query\s?" ""))]
      (cond
        (get-in db [:websocket :ready?])
@@ -51,7 +51,7 @@
                                           :variables variables}}]})
 
        (get-in db [:websocket])
-       {:db (update-in db [:websocket :queue] conj event)}
+       {:db (update-in db [:websocket :queue] conj dispatchable-event)}
 
        :else
        {::internals/send-http [(:http-url db)

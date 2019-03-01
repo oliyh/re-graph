@@ -121,8 +121,9 @@
        (testing "messages are queued when websocket isn't ready"
 
          (dispatch [::re-graph/subscribe :my-sub "{ things { id } }" {:some "variable"} [::on-thing]])
+         (dispatch [::re-graph/query "{ more_things { id } }" {:some "other-variable"} [::on-thing]])
 
-         (is (= 1 (count (get-in (db-instance) [:websocket :queue]))))
+         (is (= 2 (count (get-in (db-instance) [:websocket :queue]))))
 
          (testing "and sent when websocket opens"
 
@@ -141,7 +142,13 @@
                       (first @ws-messages))))
 
              (is (= [::websocket-connection expected-subscription-payload]
-                    (second @ws-messages))))
+                    (second @ws-messages)))
+
+             (is (= [::websocket-connection {:type "start",
+                                             :payload
+                                             {:query "query { more_things { id } }",
+                                              :variables {:some "other-variable"}}}]
+                    ((juxt first (comp #(dissoc % :id) second)) (last @ws-messages)))))
 
            (is (empty? (get-in (db-instance) [:websocket :queue]))))))
 
@@ -151,8 +158,10 @@
           ::internals/send-ws
           (fn [[ws payload]]
             (is (= ::websocket-connection ws))
-            (is (= {:id "my-sub" :type "stop"}
-                   payload)))))
+            (is (or (= {:id "my-sub" :type "stop"}
+                       payload)
+                    (= {:type "stop"}
+                       (dissoc payload :id)))))))
 
        (testing "the websocket is closed"
          (re-frame/reg-fx
