@@ -141,9 +141,10 @@ All function/event signatures now take an optional instance-name as the first ar
 
 ## Development
 
+`cider-jack-in-cljs` and choose figwheel
+
 ```clojure
 user> (dev)
-dev> (start)
 ;; visit http://localhost:3449/devcards/index.html
 dev> (cljs)
 cljs.user>

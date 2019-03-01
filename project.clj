@@ -22,7 +22,6 @@
                    :resource-paths ["dev-resources"]
                    :exclusions [[org.clojure/tools.reader]]
                    :dependencies [[org.clojure/tools.reader "1.2.2"]
-                                  [com.cemerick/piggieback "0.2.2"]
                                   [figwheel-sidecar "0.5.16"]
                                   [binaryage/devtools "0.9.10"]
                                   [devcards "0.2.4"]
@@ -32,7 +31,7 @@
                                   ;; gh-pages deploy
                                   [leiningen-core "2.8.1"]]
                    :repl-options {:init-ns user
-                                  :nrepl-middleware [cemerick.piggieback/wrap-cljs-repl]}}}
+                                  :nrepl-middleware [cider.piggieback/wrap-cljs-repl]}}}
   :aliases {"test" ["do" ["clean"] ["test"] ["doo" "phantom" "test" "once"]]
             "build-pages" ["do"
                            ["run" "-m" "pages/build"]
