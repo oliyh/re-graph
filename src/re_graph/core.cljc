@@ -88,7 +88,7 @@
      {:db (update-in db [:websocket :queue] conj dispatchable-event)}
 
      :else
-     (js/console.error
+     (internals/log
        (str
         "Error creating subscription " subscription-id
         " on instance " instance-name

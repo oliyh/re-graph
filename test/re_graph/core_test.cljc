@@ -3,9 +3,13 @@
             [re-graph.internals :as internals :refer [default-instance-name destroyed-instance]]
             [re-frame.core :as re-frame]
             [re-frame.db :refer [app-db]]
-            [day8.re-frame.test :refer-macros [run-test-sync run-test-async wait-for]]
-            [cljs.test :refer-macros [deftest is testing run-tests]]
-            [devcards.core :refer-macros [deftest]]))
+            [day8.re-frame.test :refer [run-test-sync run-test-async wait-for]
+             :refer-macros [run-test-sync run-test-async wait-for]
+             ]
+            [clojure.test :refer [deftest is testing run-tests]
+             :refer-macros [deftest is testing run-tests]
+             ]
+    #?(:cljs [devcards.core :refer-macros [deftest]])))
 
 (def on-ws-message @#'internals/on-ws-message)
 (def on-open @#'internals/on-open)
@@ -74,8 +78,8 @@
               (fn [db [_ payload]]
                 (assoc db ::thing payload)))
 
-             (on-ws-message (clj->js {:data (js/JSON.stringify
-                                             (clj->js {:type "data"
+             (on-ws-message (internals/cljc->js {:data (internals/json->string
+                                             (internals/cljc->js {:type "data"
                                                        :id "my-sub"
                                                        :payload expected-response-payload}))}))
 
@@ -274,8 +278,8 @@
               (is (= expected-query-payload
                      payload))
 
-              (on-ws-message (clj->js {:data (js/JSON.stringify
-                                              (clj->js {:type "data"
+              (on-ws-message (internals/cljc->js {:data (internals/json->string
+                                              (internals/cljc->js {:type "data"
                                                         :id (:id payload)
                                                         :payload expected-response-payload}))}))))
 
@@ -290,8 +294,8 @@
              (is (= expected-response-payload
                     (::thing @app-db))))
 
-           (on-ws-message (clj->js {:data (js/JSON.stringify
-                                           (clj->js {:type "complete"
+           (on-ws-message (internals/cljc->js {:data (internals/json->string
+                                           (internals/cljc->js {:type "complete"
                                                      :id "random-query-id"}))}))
 
            (testing "the callback is removed afterwards"
@@ -524,8 +528,8 @@
                 (get-in (db-instance) [:subscriptions "my-sub" :callback])))
 
          (testing "messages from the WS are sent to the callback-fn"
-           (on-ws-message (clj->js {:data (js/JSON.stringify
-                                           (clj->js {:type "data"
+           (on-ws-message (internals/cljc->js {:data (internals/json->string
+                                           (internals/cljc->js {:type "data"
                                                      :id "my-sub"
                                                      :payload expected-response-payload}))}))
 
@@ -651,13 +655,13 @@
               (fn [db [_ payload]]
                 (assoc db ::b-thing payload)))
 
-             ((on-ws-message :service-a) (clj->js {:data (js/JSON.stringify
-                                                          (clj->js {:type "data"
+             ((on-ws-message :service-a) (internals/cljc->js {:data (internals/json->string
+                                                          (internals/cljc->js {:type "data"
                                                                     :id "a-sub"
                                                                     :payload expected-response-payload-a}))}))
 
-             ((on-ws-message :service-b) (clj->js {:data (js/JSON.stringify
-                                                          (clj->js {:type "data"
+             ((on-ws-message :service-b) (internals/cljc->js {:data (internals/json->string
+                                                          (internals/cljc->js {:type "data"
                                                                     :id "b-sub"
                                                                     :payload expected-response-payload-b}))}))
 

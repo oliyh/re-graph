@@ -12,27 +12,29 @@
                   ["vcs" "commit"]
                   ["vcs" "push"]]
   :dependencies [[re-frame "0.10.6"]
-                 [cljs-http "0.1.45"]]
+                 [cljs-http "0.1.45"]
+                 [clj-http "3.9.1"]]
   :plugins [[lein-cljsbuild "1.1.7"]
             [lein-doo "0.1.10"]
             [lein-figwheel "0.5.14"]]
   :profiles {:provided {:dependencies [[org.clojure/clojure "1.9.0"]
                                        [org.clojure/clojurescript "1.10.439"]]}
-             :dev {:source-paths ["dev"]
-                   :resource-paths ["dev-resources"]
-                   :exclusions [[org.clojure/tools.reader]]
-                   :dependencies [[org.clojure/tools.reader "1.2.2"]
-                                  [figwheel-sidecar "0.5.16"]
-                                  [binaryage/devtools "0.9.10"]
-                                  [devcards "0.2.4"]
-                                  [day8.re-frame/test "0.1.5"]
-                                  [lein-doo "0.1.10"]
+             :dev      {:source-paths   ["dev"]
+                        :resource-paths ["dev-resources"]
+                        :exclusions     [[org.clojure/tools.reader]]
+                        :dependencies   [[org.clojure/tools.reader "1.2.2"]
+                                         [figwheel-sidecar "0.5.16"]
+                                         [binaryage/devtools "0.9.10"]
+                                         [devcards "0.2.4"]
+                                         [day8.re-frame/test "0.1.5"]
+                                         [lein-doo "0.1.10"]
 
-                                  ;; gh-pages deploy
-                                  [leiningen-core "2.8.1"]]
-                   :repl-options {:init-ns user
-                                  :nrepl-middleware [cider.piggieback/wrap-cljs-repl]}}}
-  :aliases {"test" ["do" ["clean"] ["test"] ["doo" "phantom" "test" "once"]]
+                                         ;; gh-pages deploy
+                                         [leiningen-core "2.8.1"]]
+                        :repl-options   {:init-ns user
+                                         ;:nrepl-middleware [cider.piggieback/wrap-cljs-repl]
+                                         }}}
+  :aliases {"test" ["do" ["clean"]  ["doo" "phantom" "test" "once"]]
             "build-pages" ["do"
                            ["run" "-m" "pages/build"]
                            ["cljsbuild" "once" "pages"]]
