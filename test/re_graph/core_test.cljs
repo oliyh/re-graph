@@ -82,6 +82,22 @@
              (is (= expected-response-payload
                     (::thing @app-db)))))
 
+         (testing "errors from the WS are sent to the callback"
+
+           (let [expected-response-payload {:errors {:message "Something went wrong"}}]
+             (re-frame/reg-event-db
+              ::on-thing
+              (fn [db [_ payload]]
+                (assoc db ::thing payload)))
+
+             (on-ws-message (clj->js {:data (js/JSON.stringify
+                                             (clj->js {:type "error"
+                                                       :id "my-sub"
+                                                       :payload (:errors expected-response-payload)}))}))
+
+             (is (= expected-response-payload
+                    (::thing @app-db)))))
+
          (testing "and unregistered"
            (re-frame/reg-fx
             ::internals/send-ws

@@ -156,7 +156,7 @@
         (re-frame/dispatch [::on-ws-complete instance-name (aget data "id")])
 
         "error"
-        (js/console.warn (str "GraphQL error for " instance-name " - " (aget data "id") ": " (aget data "payload" "message")))
+        (re-frame/dispatch [::on-ws-data instance-name (aget data "id") {:errors (js->clj (aget data "payload") :keywordize-keys true)}])
 
         (js/console.debug "Ignoring graphql-ws event " instance-name " - " (aget data "type"))))))
 
