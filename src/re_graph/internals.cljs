@@ -9,6 +9,8 @@
 
 (def default-instance-name ::default)
 
+(def destroyed-instance ::destroyed-instance)
+
 (defn- cons-interceptor [ctx interceptor]
   (update ctx :queue #(into (into empty-queue [interceptor]) %)))
 
@@ -23,7 +25,11 @@
                    instance (get re-graph instance-name)
                    event-name (first (get-coeffect ctx ::rfi/untrimmed-event))
                    trimmed-event (if (= provided-instance-name instance-name) (subvec event 1) event)]
-               (if instance
+               (cond
+                 (= instance ::destroyed-instance)
+                 ctx
+
+                 instance
                  (-> ctx
                      (assoc-coeffect :instance instance)
                      (assoc-coeffect :instance-name instance-name)
@@ -31,6 +37,7 @@
                      (cons-interceptor (rfi/path :re-graph instance-name))
                      (assoc-coeffect :event trimmed-event))
 
+                 :default
                  (do (js/console.error "No default instance of re-graph found but no valid instance name was provided. Valid instance names are:" (keys re-graph)
                                        "but was provided with" provided-instance-name
                                        "handling event" event-name)

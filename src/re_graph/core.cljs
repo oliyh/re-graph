@@ -1,6 +1,6 @@
 (ns re-graph.core
   (:require [re-frame.core :as re-frame]
-            [re-graph.internals :as internals :refer [interceptors default-instance-name]]
+            [re-graph.internals :as internals :refer [interceptors default-instance-name destroyed-instance]]
             [re-frame.std-interceptors :as rfi]
             [clojure.string :as string]))
 
@@ -165,7 +165,7 @@
       :dispatch [::destroy instance-name]}
 
      (merge
-      {:db nil}
+      {:db destroyed-instance}
       (when-let [ws (get-in db [:websocket :connection])]
         {::internals/disconnect-ws [ws]})))))
 
