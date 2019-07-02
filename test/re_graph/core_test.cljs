@@ -1,6 +1,6 @@
 (ns re-graph.core-test
   (:require [re-graph.core :as re-graph]
-            [re-graph.internals :as internals :refer [default-instance-name]]
+            [re-graph.internals :as internals :refer [default-instance-name destroyed-instance]]
             [re-frame.core :as re-frame]
             [re-frame.db :refer [app-db]]
             [day8.re-frame.test :refer-macros [run-test-sync run-test-async wait-for]]
@@ -187,8 +187,8 @@
 
        (dispatch [::re-graph/destroy])
 
-       (testing "the re-graph state is no more"
-         (is (nil? (db-instance))))))))
+       (testing "the re-graph state is set to destroyed instance"
+         (is (= (db-instance) destroyed-instance)))))))
 
 (deftest websocket-lifecycle-test
   (run-websocket-lifecycle-test nil))
