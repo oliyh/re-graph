@@ -1,0 +1,3 @@
+{:deps {re-frame {:mvn/version "0.10.6"}
+        cljs-http {:mvn/version "0.1.45"}}
+ :paths ["src"]}
