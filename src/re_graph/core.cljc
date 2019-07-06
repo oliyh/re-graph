@@ -158,7 +158,7 @@
 (re-frame/reg-event-fx
  ::destroy
  interceptors
- (fn [{:keys [db instance-name]}]
+ (fn [{:keys [db instance-name]} _]
    (if-let [subscription-ids (not-empty (-> db :subscriptions keys))]
      {:dispatch-n (for [subscription-id subscription-ids]
                     [::unsubscribe instance-name subscription-id])
