@@ -4,17 +4,20 @@
             [re-frame.core :as re-frame]
             [re-frame.db :refer [app-db]]
             [day8.re-frame.test :refer [run-test-sync run-test-async wait-for]
-             :refer-macros [run-test-sync run-test-async wait-for]
-             ]
+             :refer-macros [run-test-sync run-test-async wait-for]]
             [clojure.test :refer [deftest is testing run-tests]
-             :refer-macros [deftest is testing run-tests]
-             ]
-    #?(:cljs [devcards.core :refer-macros [deftest]])))
+             :refer-macros [deftest is testing run-tests]]
+            #?(:cljs [devcards.core :refer-macros [deftest]])
+            #?(:clj [cheshire.core :as json])))
 
 (def on-ws-message @#'internals/on-ws-message)
 (def on-open @#'internals/on-open)
 (def on-close @#'internals/on-close)
 (def insert-http-status @#'internals/insert-http-status)
+
+(defn- data->message [d]
+  #?(:cljs (clj->js {:data (js/JSON.stringify (clj->js d))})
+     :clj (json/encode d)))
 
 (re-frame/reg-fx
  ::internals/connect-ws
@@ -39,7 +42,8 @@
         db-instance #(get-in @app-db [:re-graph (or instance-name default-instance-name)])
         on-ws-message (on-ws-message (or instance-name default-instance-name))]
     (run-test-sync
-     (init instance-name {:connection-init-payload nil})
+     (init instance-name {:connection-init-payload nil
+                          :ws-url "ws://socket.rocket"})
 
      (let [expected-subscription-payload {:id "my-sub"
                                           :type "start"
@@ -78,10 +82,9 @@
               (fn [db [_ payload]]
                 (assoc db ::thing payload)))
 
-             (on-ws-message (internals/cljc->js {:data (internals/json->string
-                                             (internals/cljc->js {:type "data"
-                                                       :id "my-sub"
-                                                       :payload expected-response-payload}))}))
+             (on-ws-message (data->message {:type "data"
+                                            :id "my-sub"
+                                            :payload expected-response-payload}))
 
              (is (= expected-response-payload
                     (::thing @app-db)))))
@@ -94,10 +97,9 @@
               (fn [db [_ payload]]
                 (assoc db ::thing payload)))
 
-             (on-ws-message (clj->js {:data (js/JSON.stringify
-                                             (clj->js {:type "error"
-                                                       :id "my-sub"
-                                                       :payload (:errors expected-response-payload)}))}))
+             (on-ws-message (data->message {:type "error"
+                                            :id "my-sub"
+                                            :payload (:errors expected-response-payload)}))
 
              (is (= expected-response-payload
                     (::thing @app-db)))))
@@ -136,7 +138,8 @@
                                           :payload {:query "subscription { things { id } }"
                                                     :variables {:some "variable"}}}]
 
-       (init instance-name {:connection-init-payload init-payload})
+       (init instance-name {:connection-init-payload init-payload
+                            :ws-url "ws://socket.rocket"})
 
        (testing "messages are queued when websocket isn't ready"
 
@@ -205,8 +208,15 @@
         db-instance #(get-in @app-db [:re-graph (or instance-name default-instance-name)])
         on-close (on-close (or instance-name default-instance-name))]
     (run-test-async
+
+     (re-frame/reg-fx
+      :dispatch-later
+      (fn [[{:keys [dispatch]}]]
+        (re-frame/dispatch dispatch)))
+
      (testing "websocket reconnects when disconnected"
        (init instance-name {:connection-init-payload {:token "abc"}
+                            :ws-url "ws://socket.rocket"
                             :ws-reconnect-timeout 0})
 
        (wait-for
@@ -260,7 +270,8 @@
         on-ws-message (on-ws-message (or instance-name default-instance-name))]
     (with-redefs [internals/generate-query-id (constantly "random-query-id")]
       (run-test-sync
-       (init instance-name {:connection-init-payload nil})
+       (init instance-name {:connection-init-payload nil
+                            :ws-url "ws://socket.rocket"})
 
        (let [expected-query-payload {:id "random-query-id"
                                      :type "start"
@@ -278,10 +289,9 @@
               (is (= expected-query-payload
                      payload))
 
-              (on-ws-message (internals/cljc->js {:data (internals/json->string
-                                              (internals/cljc->js {:type "data"
-                                                        :id (:id payload)
-                                                        :payload expected-response-payload}))}))))
+              (on-ws-message (data->message {:type "data"
+                                             :id (:id payload)
+                                             :payload expected-response-payload}))))
 
            (re-frame/reg-event-db
             ::on-thing
@@ -294,9 +304,8 @@
              (is (= expected-response-payload
                     (::thing @app-db))))
 
-           (on-ws-message (internals/cljc->js {:data (internals/json->string
-                                           (internals/cljc->js {:type "complete"
-                                                     :id "random-query-id"}))}))
+           (on-ws-message (data->message {:type "complete"
+                                          :id "random-query-id"}))
 
            (testing "the callback is removed afterwards"
              (is (nil? (get-in (db-instance) [:subscriptions "random-query-id"]))))))))))
@@ -501,7 +510,7 @@
         unsubscribe (if instance-name (partial re-graph/unsubscribe instance-name) re-graph/unsubscribe)]
     (testing "can call normal functions instead of needing re-frame"
       (run-test-sync
-       (init {:connection-init-payload nil})
+       (init {:connection-init-payload nil :ws-url "ws://socket.rocket"})
 
        (let [expected-subscription-payload {:id "my-sub"
                                             :type "start"
@@ -528,10 +537,9 @@
                 (get-in (db-instance) [:subscriptions "my-sub" :callback])))
 
          (testing "messages from the WS are sent to the callback-fn"
-           (on-ws-message (internals/cljc->js {:data (internals/json->string
-                                           (internals/cljc->js {:type "data"
-                                                     :id "my-sub"
-                                                     :payload expected-response-payload}))}))
+           (on-ws-message (data->message {:type "data"
+                                          :id "my-sub"
+                                          :payload expected-response-payload}))
 
            (is @callback-called?))
 
@@ -594,8 +602,8 @@
     (fn [[instance-name & args]]
       ((on-open instance-name (keyword (str (name instance-name) "-connection"))))))
 
-   (init :service-a {:connection-init-payload nil})
-   (init :service-b {:connection-init-payload nil})
+   (init :service-a {:connection-init-payload nil :ws-url "ws://socket.rocket"})
+   (init :service-b {:connection-init-payload nil :ws-url "ws://socket.rocket"})
 
    (let [expected-subscription-payload-a {:id "a-sub"
                                           :type "start"
@@ -655,15 +663,13 @@
               (fn [db [_ payload]]
                 (assoc db ::b-thing payload)))
 
-             ((on-ws-message :service-a) (internals/cljc->js {:data (internals/json->string
-                                                          (internals/cljc->js {:type "data"
-                                                                    :id "a-sub"
-                                                                    :payload expected-response-payload-a}))}))
+             ((on-ws-message :service-a) (data->message {:type "data"
+                                                         :id "a-sub"
+                                                         :payload expected-response-payload-a}))
 
-             ((on-ws-message :service-b) (internals/cljc->js {:data (internals/json->string
-                                                          (internals/cljc->js {:type "data"
-                                                                    :id "b-sub"
-                                                                    :payload expected-response-payload-b}))}))
+             ((on-ws-message :service-b) (data->message {:type "data"
+                                                         :id "b-sub"
+                                                         :payload expected-response-payload-b}))
 
              (is (= expected-response-payload-a
                     (::a-thing @app-db)))

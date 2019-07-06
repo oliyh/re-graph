@@ -13,7 +13,9 @@
                   ["vcs" "push"]]
   :dependencies [[re-frame "0.10.6"]
                  [cljs-http "0.1.45"]
-                 [clj-http "3.9.1"]]
+                 [clj-http "3.9.1"]
+                 [stylefruits/gniazdo "1.1.1"]
+                 [cheshire "5.8.1"]]
   :plugins [[lein-cljsbuild "1.1.7"]
             [lein-doo "0.1.10"]
             [lein-figwheel "0.5.14"]]
@@ -34,7 +36,7 @@
                         :repl-options   {:init-ns user
                                          ;:nrepl-middleware [cider.piggieback/wrap-cljs-repl]
                                          }}}
-  :aliases {"test" ["do" ["clean"]  ["doo" "phantom" "test" "once"]]
+  :aliases {"test" ["do" ["clean"] ["test"] ["doo" "phantom" "test" "once"]]
             "build-pages" ["do"
                            ["run" "-m" "pages/build"]
                            ["cljsbuild" "once" "pages"]]

@@ -6,9 +6,11 @@
             #?(:cljs [cljs-http.client :as http]
                :clj  [clj-http.client :as http])
             #?(:cljs [clojure.core.async :as a]
-               :clj [clojure.core.async :refer [go] :as a ])
-            )
-  #?(:cljs (:require-macros [cljs.core.async.macros :refer [go]])))
+               :clj [clojure.core.async :refer [go] :as a])
+            #?(:clj [gniazdo.core :as ws])
+            #?(:clj [cheshire.core :as json]))
+  #?(:cljs (:require-macros [cljs.core.async.macros :refer [go]]))
+  #?(:clj (:import [java.util UUID])))
 
 (def default-instance-name ::default)
 
@@ -20,21 +22,15 @@
 (def log #?(:cljs js/console.error
             :clj println))
 
-(defn cljc->js [& args]
-  #?(:cljs (apply clj->js args)
-     :clj c))
+(defn- encode [obj]
+  #?(:cljs (js/JSON.stringify (clj->js obj))
+     :cljs (json/encode obj)))
 
-(defn js->cljc [& args]
-  #?(:cljs (apply js->clj args)
-     :clj js-obj))
-
-(defn json->string [js-obj]
-  #?(:cljs (js/JSON.stringify js-obj)
-     :cljs js-obj))
-
-(defn string->json [s]
-  #?(:cljs (js/JSON.parse s)
-     :clj s))
+(defn- message->data [m]
+  #?(:cljs (-> (aget m "data")
+               (js/JSON.parse s)
+               (js->clj obj :keywordize-keys true))
+     :clj (json/decode m keyword)))
 
 (def re-graph-instance
   (->interceptor
@@ -102,7 +98,7 @@
 (re-frame/reg-fx
  ::send-ws
  (fn [[websocket payload]]
-   (.send websocket (json->string (cljc->js payload)))))
+   (.send websocket (encode payload))))
 
 (re-frame/reg-fx
  ::call-callback
@@ -164,7 +160,7 @@
 (re-frame/reg-event-fx
  ::on-ws-close
  interceptors
- (fn [{:keys [db instance-name]}]
+ (fn [{:keys [db instance-name]} _]
    (merge
     {:db (let [new-db (-> db
                           (assoc-in [:websocket :ready?] false)
@@ -176,25 +172,29 @@
 
 (defn- on-ws-message [instance-name]
   (fn [m]
-    (let [data (string->json (aget m "data"))]
-      (condp = (aget data "type")
+    (let [{:keys [type id payload] :as data} (message->data m)]
+      (condp = type
         "data"
-        (re-frame/dispatch [::on-ws-data instance-name (aget data "id") (js->cljc (aget data "payload") :keywordize-keys true)])
+        (re-frame/dispatch [::on-ws-data instance-name id payload])
 
         "complete"
-        (re-frame/dispatch [::on-ws-complete instance-name (aget data "id")])
+        (re-frame/dispatch [::on-ws-complete instance-name id])
 
         "error"
-        (re-frame/dispatch [::on-ws-data instance-name (aget data "id") {:errors (js->cljc (aget data "payload") :keywordize-keys true)}])
+        (re-frame/dispatch [::on-ws-data instance-name id {:errors payload}])
 
-        (log "Ignoring graphql-ws event " instance-name " - " (aget data "type"))))))
+        (log "Ignoring graphql-ws event " instance-name " - " type)))))
 
-(defn- on-open [instance-name ws]
-  (fn [e]
-    (re-frame/dispatch [::on-ws-open instance-name ws])))
+(defn- on-open
+  ([instance-name]
+   (fn [ws]
+     ((on-open instance-name ws))))
+  ([instance-name ws]
+   (fn []
+     (re-frame/dispatch [::on-ws-open instance-name ws]))))
 
 (defn- on-close [instance-name]
-  (fn [e]
+  (fn [& args]
     (re-frame/dispatch [::on-ws-close instance-name])))
 
 (defn- on-error [instance-name]
@@ -204,27 +204,29 @@
 (re-frame/reg-event-fx
  ::reconnect-ws
  interceptors
- (fn [{:keys [db instance-name]}]
+ (fn [{:keys [db instance-name]} _]
    (when-not (get-in db [:websocket :ready?])
      {::connect-ws [instance-name (get-in db [:websocket :url])]})))
-
-(defn new-websocket [url name]
-  #?(:cljs (js/WebSocket. url name)
-     :clj url))
 
 (re-frame/reg-fx
  ::connect-ws
  (fn [[instance-name ws-url]]
-   (let [ws (new-websocket ws-url "graphql-ws")]
-     (aset ws "onmessage" (on-ws-message instance-name))
-     (aset ws "onopen" (on-open instance-name ws))
-     (aset ws "onclose" (on-close instance-name))
-     (aset ws "onerror" (on-error instance-name)))))
+   #?(:cljs (let [ws (js/WebSocket. url name)]
+              (aset ws "onmessage" (on-ws-message instance-name))
+              (aset ws "onopen" (on-open instance-name ws))
+              (aset ws "onclose" (on-close instance-name))
+              (aset ws "onerror" (on-error instance-name)))
+      :clj (ws/connect ws-url
+             :on-receive (on-ws-message instance-name)
+             :on-open (on-open instance-name)
+             :on-close (on-close instance-name)
+             :on-error (on-error instance-name)))))
 
 (re-frame/reg-fx
  ::disconnect-ws
  (fn [[ws]]
-   (.close ws)))
+   #?(:cljs (.close ws)
+      :clj (ws/close ws))))
 
 (defn default-ws-url []
   #?(:cljs
@@ -232,7 +234,8 @@
        (let [host-and-port (.-host js/window.location)
              ssl? (re-find #"^https" (.-origin js/window.location))]
          (str (if ssl? "wss" "ws") "://" host-and-port "/graphql-ws")))
-     :clj "???"))
+     :clj nil))
 
 (defn generate-query-id []
-  (.substr (.toString (Math/random) 36) 2 8))
+  #?(:cljs (.substr (.toString (Math/random) 36) 2 8)
+     :clj (str (UUID/randomUUID))))
