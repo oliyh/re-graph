@@ -36,7 +36,7 @@
                         :repl-options   {:init-ns user
                                          ;:nrepl-middleware [cider.piggieback/wrap-cljs-repl]
                                          }}}
-  :aliases {"test" ["do" ["clean"]  ["doo" "phantom" "test" "once"]]
+  :aliases {"test" ["do" ["clean"] ["test"] ["doo" "phantom" "test" "once"]]
             "build-pages" ["do"
                            ["run" "-m" "pages/build"]
                            ["cljsbuild" "once" "pages"]]

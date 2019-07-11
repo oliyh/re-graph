@@ -208,6 +208,12 @@
         db-instance #(get-in @app-db [:re-graph (or instance-name default-instance-name)])
         on-close (on-close (or instance-name default-instance-name))]
     (run-test-async
+
+     (re-frame/reg-fx
+      :dispatch-later
+      (fn [[{:keys [dispatch]}]]
+        (re-frame/dispatch dispatch)))
+
      (testing "websocket reconnects when disconnected"
        (init instance-name {:connection-init-payload {:token "abc"}
                             :ws-url "ws://socket.rocket"

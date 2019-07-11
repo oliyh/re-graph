@@ -138,7 +138,6 @@
  ::on-ws-open
  interceptors
  (fn [{:keys [db instance-name]} [ws]]
-   (println "ws is open!" instance-name ws)
    (merge
     {:db (update db :websocket
                     assoc
