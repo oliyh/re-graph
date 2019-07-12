@@ -28,8 +28,8 @@
 
 (defn- message->data [m]
   #?(:cljs (-> (aget m "data")
-               (js/JSON.parse s)
-               (js->clj obj :keywordize-keys true))
+               (js/JSON.parse)
+               (js->clj :keywordize-keys true))
      :clj (json/decode m keyword)))
 
 (def re-graph-instance
@@ -211,7 +211,7 @@
 (re-frame/reg-fx
  ::connect-ws
  (fn [[instance-name ws-url]]
-   #?(:cljs (let [ws (js/WebSocket. url name)]
+   #?(:cljs (let [ws (js/WebSocket. ws-url name)]
               (aset ws "onmessage" (on-ws-message instance-name))
               (aset ws "onopen" (on-open instance-name ws))
               (aset ws "onclose" (on-close instance-name))

@@ -7,7 +7,6 @@
              :refer-macros [run-test-sync run-test-async wait-for]]
             [clojure.test :refer [deftest is testing run-tests]
              :refer-macros [deftest is testing run-tests]]
-            #?(:cljs [devcards.core :refer-macros [deftest]])
             #?(:clj [cheshire.core :as json])))
 
 (def on-ws-message @#'internals/on-ws-message)
