@@ -2,6 +2,7 @@
   (:require [re-frame.core :as re-frame]
             [re-graph.internals :as internals :refer [interceptors default-instance-name destroyed-instance]]
             [re-frame.std-interceptors :as rfi]
+            [re-graph.logging :as log]
             [clojure.string :as string]))
 
 (re-frame/reg-event-fx
@@ -88,7 +89,7 @@
      {:db (update-in db [:websocket :queue] conj dispatchable-event)}
 
      :else
-     (internals/log
+     (log/error
        (str
         "Error creating subscription " subscription-id
         " on instance " instance-name
