@@ -22,7 +22,7 @@
 
 (defn- encode [obj]
   #?(:cljs (js/JSON.stringify (clj->js obj))
-     :cljs (json/encode obj)))
+     :clj (json/encode obj)))
 
 (defn- message->data [m]
   #?(:cljs (-> (aget m "data")
@@ -96,7 +96,8 @@
 (re-frame/reg-fx
  ::send-ws
  (fn [[websocket payload]]
-   (.send websocket (encode payload))))
+   #?(:cljs (.send websocket (encode payload))
+      :clj (ws/send-msg websocket (encode payload)))))
 
 (re-frame/reg-fx
  ::call-callback
@@ -214,12 +215,12 @@
               (aset ws "onopen" (on-open instance-name ws))
               (aset ws "onclose" (on-close instance-name))
               (aset ws "onerror" (on-error instance-name)))
-      :clj (ws/connect ws-url
-             :on-receive (on-ws-message instance-name)
-             :on-open (on-open instance-name)
-             :on-close (on-close instance-name)
-             :on-error (on-error instance-name)
-             :subprotocols ["graphql-ws"]))))
+      :clj (let [ws (ws/connect ws-url
+                                :on-receive (on-ws-message instance-name)
+                                :on-close (on-close instance-name)
+                                :on-error (on-error instance-name)
+                                :subprotocols ["graphql-ws"])]
+             ((on-open instance-name ws))))))
 
 (re-frame/reg-fx
  ::disconnect-ws
