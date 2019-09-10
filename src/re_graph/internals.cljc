@@ -87,11 +87,25 @@
 (re-frame/reg-fx
  ::send-http
  (fn [[http-url {:keys [request payload]} callback-fn]]
-   (go (let [response (a/<! (http/post http-url (assoc request :json-params payload)))
-             {:keys [status error-code]} response]
-         (if (= :no-error error-code)
-           (callback-fn (:body response))
-           (callback-fn (insert-http-status (:body response) status)))))))
+   #?(:cljs (go (let [response (a/<! (http/post http-url (assoc request :json-params payload)))
+                      {:keys [status body error-code]} response]
+                  (if (= :no-error error-code)
+                    (callback-fn body)
+                    (callback-fn (insert-http-status body status)))))
+      :clj (http/post http-url
+                      (-> request
+                          (update :headers merge {"Content-Type" "application/json"
+                                                  "Accept" "application/json"})
+                          (merge {:body (encode payload)
+                                  :as :json
+                                  :async? true
+                                  :throw-exceptions false}))
+                      (fn [{:keys [status body]}]
+                        (if (http/unexceptional-status? status)
+                          (callback-fn body)
+                          (callback-fn (insert-http-status body status))))
+                      (fn [{:keys [status body]}]
+                        (callback-fn (insert-http-status body status)))))))
 
 (re-frame/reg-fx
  ::send-ws
