@@ -1,6 +1,6 @@
 # re-graph
 
-re-graph is a graphql client for ClojureScript with bindings for [re-frame](https://github.com/Day8/re-frame) applications.
+re-graph is a graphql client for Clojure and ClojureScript with bindings for [re-frame](https://github.com/Day8/re-frame) applications.
 
 ## Notes
 
@@ -21,7 +21,7 @@ Add re-graph to your project's dependencies:
 
 [![Clojars Project](https://img.shields.io/clojars/v/re-graph.svg)](https://clojars.org/re-graph)
 
-### Vanilla ClojureScript
+### Vanilla Clojure/Script
 
 Call the `init` function to bootstrap it and then use `subscribe`, `unsubscribe`, `query` and `mutate` functions:
 
