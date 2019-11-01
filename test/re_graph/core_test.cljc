@@ -315,6 +315,9 @@
 (deftest named-websocket-query-test
   (run-websocket-query-test :service-a))
 
+(defn- dispatch-response [[instance-name query-id] payload]
+  (re-frame/dispatch [::internals/http-complete instance-name query-id payload]))
+
 (defn- run-http-query-test [instance-name]
   (let [dispatch (partial dispatch-to-instance instance-name)]
     (run-test-sync
@@ -330,13 +333,13 @@
 
            (re-frame/reg-fx
             ::internals/send-http
-            (fn [[http-url {:keys [payload]} callback-fn]]
+            (fn [[_ _ http-url {:keys [payload]} :as fx-args]]
               (is (= expected-query-payload
                      payload))
 
               (is (= expected-http-url http-url))
 
-              (callback-fn expected-response-payload)))
+              (dispatch-response fx-args expected-response-payload)))
 
            (re-frame/reg-event-db
             ::on-thing
@@ -347,7 +350,23 @@
 
            (testing "responses are sent to the callback"
              (is (= expected-response-payload
-                    (::thing @app-db))))))))))
+                    (::thing @app-db)))))
+
+         (testing "In flight queries are deduplicated"
+           (let [id :abc-123]
+             (re-frame/reg-fx
+              ::internals/send-http
+              (fn [[_ query-id]]
+                (is (= id query-id))))
+
+             (dispatch [::re-graph/query id "{ things { id } }" {:some "variable"} [::on-thing]])
+
+             (re-frame/reg-fx
+              ::internals/send-http
+              (fn [_]
+                (is false "Should not have sent an http request for a duplicate in-flight query id")))
+
+             (dispatch [::re-graph/query id "{ things { id } }" {:some "variable"} [::on-thing]]))))))))
 
 (deftest http-query-test
   (run-http-query-test nil))
@@ -356,8 +375,7 @@
   (run-http-query-test :service-a))
 
 (defn- run-http-query-error-test [instance-name]
-  (let [dispatch (partial dispatch-to-instance instance-name)
-        db-instance #(get-in @app-db [:re-graph (or instance-name default-instance-name)])]
+  (let [dispatch (partial dispatch-to-instance instance-name)]
     (run-test-sync
      (let [mock-response (atom {})
            query "{ things { id } }"
@@ -367,12 +385,12 @@
 
        (re-frame/reg-fx
         ::internals/send-http
-        (fn [[_ _ callback-fn]]
+        (fn [fx-args]
           (let [response @mock-response
                 {:keys [status error-code]} response]
-            (if (= :no-error error-code)
-              (callback-fn (:body response))
-              (callback-fn (insert-http-status (:body response) status))))))
+            (dispatch-response fx-args (if (= :no-error error-code)
+                                         (:body response)
+                                         (insert-http-status (:body response) status))))))
 
        (re-frame/reg-event-db
         ::on-thing
@@ -436,8 +454,7 @@
   (run-http-query-error-test :service-a))
 
 (defn- run-http-mutation-test [instance-name]
-  (let [dispatch (partial dispatch-to-instance instance-name)
-        db-instance #(get-in @app-db [:re-graph (or instance-name default-instance-name)])]
+  (let [dispatch (partial dispatch-to-instance instance-name)]
     (run-test-sync
      (let [expected-http-url "http://foo.bar/graph-ql"]
        (init instance-name {:http-url expected-http-url
@@ -454,10 +471,10 @@
 
            (re-frame/reg-fx
             ::internals/send-http
-            (fn [[http-url {:keys [payload]} callback-fn]]
+            (fn [[_ _ http-url {:keys [payload]} :as fx-args]]
               (is (= expected-query-payload payload))
               (is (= expected-http-url http-url))
-              (callback-fn expected-response-payload)))
+              (dispatch-response fx-args expected-response-payload)))
 
            (re-frame/reg-event-db
             ::on-mutate
@@ -468,7 +485,23 @@
 
            (testing "responses are sent to the callback"
              (is (= expected-response-payload
-                    (::mutation @app-db))))))))))
+                    (::mutation @app-db)))))
+
+         (testing "In flight mutations are deduplicated"
+           (let [id :abc-123]
+             (re-frame/reg-fx
+              ::internals/send-http
+              (fn [[_ query-id]]
+                (is (= id query-id))))
+
+             (dispatch [::re-graph/mutate id mutation params [::on-thing]])
+
+             (re-frame/reg-fx
+              ::internals/send-http
+              (fn [_]
+                (is false "Should not have sent an http request for a duplicate in-flight mutation id")))
+
+             (dispatch [::re-graph/mutate id mutation params [::on-thing]]))))))))
 
 (deftest http-mutation-test
   (run-http-mutation-test nil))
@@ -477,8 +510,7 @@
   (run-http-mutation-test :service-a))
 
 (defn- run-http-parameters-test [instance-name]
-  (let [dispatch (partial dispatch-to-instance instance-name)
-        db-instance #(get-in @app-db [:re-graph (or instance-name default-instance-name)])]
+  (let [dispatch (partial dispatch-to-instance instance-name)]
     (run-test-sync
      (let [expected-http-url "http://foo.bar/graph-ql"
            expected-request {:with-credentials? false}]
@@ -488,7 +520,7 @@
        (testing "Request can be specified"
          (re-frame/reg-fx
           ::internals/send-http
-          (fn [[http-url {:keys [request payload]} callback-fn]]
+          (fn [[_ _ http-url {:keys [request payload]} :as fx-args]]
             (is (= expected-request
                    request))))
          (dispatch [::re-graph/query "{ things { id } }" {:some "variable"} [::on-thing]])
@@ -506,11 +538,14 @@
         on-ws-message (on-ws-message (or instance-name default-instance-name))
         init (if instance-name (partial re-graph/init instance-name) re-graph/init)
         subscribe (if instance-name (partial re-graph/subscribe instance-name) re-graph/subscribe)
-        unsubscribe (if instance-name (partial re-graph/unsubscribe instance-name) re-graph/unsubscribe)]
-    (testing "can call normal functions instead of needing re-frame"
+        unsubscribe (if instance-name (partial re-graph/unsubscribe instance-name) re-graph/unsubscribe)
+        query (if instance-name (partial re-graph/query instance-name) re-graph/query)]
+
+    (testing "can call normal functions instead of needing re-frame")
+
+    (testing "using a websocket"
       (run-test-sync
        (init {:connection-init-payload nil :ws-url "ws://socket.rocket"})
-
        (let [expected-subscription-payload {:id "my-sub"
                                             :type "start"
                                             :payload {:query "subscription { things { id } }"
@@ -552,7 +587,36 @@
 
            (unsubscribe :my-sub)
 
-           (is (nil? (get-in (db-instance) [:subscriptions "my-sub"])))))))))
+           (is (nil? (get-in (db-instance) [:subscriptions "my-sub"])))))))
+
+    (testing "using http"
+      (run-test-sync
+       (let [expected-http-url "http://foo.bar/graph-ql"
+             expected-query-payload {:query "query { things { id } }"
+                                     :variables {:some "variable"}}
+             expected-response-payload {:data {:things [{:id 1} {:id 2}]}}
+             callback-called? (atom false)
+             callback-fn (fn [payload]
+                           (reset! callback-called? true)
+                           (is (= expected-response-payload payload)))]
+
+         (init {:http-url expected-http-url
+                :ws-url nil})
+
+         (re-frame/reg-fx
+          ::internals/send-http
+          (fn [[_ _ http-url {:keys [payload]} :as fx-args]]
+            (is (= expected-query-payload
+                   payload))
+
+            (is (= expected-http-url http-url))
+
+            (dispatch-response fx-args expected-response-payload)))
+
+         (query "{ things { id } }" {:some "variable"} callback-fn)
+
+         (testing "responses are sent to the callback"
+           (is @callback-called?)))))))
 
 (deftest non-re-frame-test
   (run-non-re-frame-test nil))
@@ -574,13 +638,12 @@
 
          (re-frame/reg-fx
           ::internals/send-http
-          (fn [[http-url {:keys [payload]} callback-fn]]
+          (fn [[_ _ http-url {:keys [payload]} :as fx-args]]
             (is (= expected-query-payload
                    payload))
 
             (is (= expected-http-url http-url))
-
-            (callback-fn expected-response-payload)))
+            (dispatch-response fx-args expected-response-payload)))
 
          (re-frame/reg-event-db
           ::on-thing

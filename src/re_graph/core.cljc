@@ -1,71 +1,76 @@
 (ns re-graph.core
   (:require [re-frame.core :as re-frame]
             [re-graph.internals :as internals :refer [interceptors default-instance-name destroyed-instance]]
-            [re-frame.std-interceptors :as rfi]
             [re-graph.logging :as log]
             [clojure.string :as string]))
 
 (re-frame/reg-event-fx
  ::mutate
  interceptors
- (fn [{:keys [db dispatchable-event]} [query variables callback-event :as event]]
+ (fn [{:keys [db dispatchable-event instance-name]} [query-id query variables callback-event :as event]]
    (let [query (str "mutation " (string/replace query #"^mutation\s?" ""))]
      (cond
+       (or (get-in db [:http-requests query-id])
+           (get-in db [:subscriptions query-id]))
+       {} ;; duplicate in-flight mutation
+
        (get-in db [:websocket :ready?])
-       (let [query-id (internals/generate-query-id)]
-         {:db (assoc-in db [:subscriptions query-id] {:callback callback-event})
-          ::internals/send-ws [(get-in db [:websocket :connection])
-                               {:id query-id
-                                :type "start"
-                                :payload {:query query
-                                          :variables variables}}]})
+       {:db (assoc-in db [:subscriptions query-id] {:callback callback-event})
+        ::internals/send-ws [(get-in db [:websocket :connection])
+                             {:id query-id
+                              :type "start"
+                              :payload {:query query
+                                        :variables variables}}]}
 
        (:websocket db)
        {:db (update-in db [:websocket :queue] conj dispatchable-event)}
 
        :else
-       {::internals/send-http [(:http-url db)
+       {:db (assoc-in db [:http-requests query-id] {:callback callback-event})
+        ::internals/send-http [instance-name
+                               query-id
+                               (:http-url db)
                                {:request (:http-parameters db)
                                 :payload {:query query
-                                          :variables variables}}
-                               (fn [payload]
-                                 (re-frame/dispatch (conj callback-event payload)))]}))))
+                                          :variables variables}}]}))))
 
-(defn mutate
-  ([query variables callback-fn] (mutate default-instance-name query variables callback-fn))
-  ([instance-name query variables callback-fn]
-   (re-frame/dispatch [::mutate query variables [::internals/callback callback-fn]])))
+(defn mutate [args]
+  (let [callback-fn (last args)]
+    (re-frame/dispatch (into [::mutate] (conj (vec (butlast args)) [::internals/callback callback-fn])))))
 
 (re-frame/reg-event-fx
  ::query
  interceptors
- (fn [{:keys [db dispatchable-event]} [query variables callback-event :as event]]
+ (fn [{:keys [db dispatchable-event instance-name]} [query-id query variables callback-event :as event]]
    (let [query (str "query " (string/replace query #"^query\s?" ""))]
      (cond
+       (or (get-in db [:http-requests query-id])
+           (get-in db [:subscriptions query-id]))
+       {} ;; duplicate in-flight query
+
        (get-in db [:websocket :ready?])
-       (let [query-id (internals/generate-query-id)]
-         {:db (assoc-in db [:subscriptions query-id] {:callback callback-event})
-          ::internals/send-ws [(get-in db [:websocket :connection])
-                               {:id query-id
-                                :type "start"
-                                :payload {:query query
-                                          :variables variables}}]})
+       {:db (assoc-in db [:subscriptions query-id] {:callback callback-event})
+        ::internals/send-ws [(get-in db [:websocket :connection])
+                             {:id query-id
+                              :type "start"
+                              :payload {:query query
+                                        :variables variables}}]}
 
        (get-in db [:websocket])
        {:db (update-in db [:websocket :queue] conj dispatchable-event)}
 
        :else
-       {::internals/send-http [(:http-url db)
+       {:db (assoc-in db [:http-requests query-id] {:callback callback-event})
+        ::internals/send-http [instance-name
+                               query-id
+                               (:http-url db)
                                {:request (:http-parameters db)
                                 :payload {:query query
-                                          :variables variables}}
-                               (fn [payload]
-                                 (re-frame/dispatch (conj callback-event payload)))]}))))
+                                          :variables variables}}]}))))
 
-(defn query
-  ([query-string variables callback-fn] (query default-instance-name query-string variables callback-fn))
-  ([instance-name query-string variables callback-fn]
-   (re-frame/dispatch [::query query-string variables [::internals/callback callback-fn]])))
+(defn query [& args]
+  (let [callback-fn (last args)]
+    (re-frame/dispatch (into [::query] (conj (vec (butlast args)) [::internals/callback callback-fn])))))
 
 (re-frame/reg-event-fx
  ::subscribe

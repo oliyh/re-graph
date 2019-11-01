@@ -30,6 +30,17 @@
                (js->clj :keywordize-keys true))
      :clj (json/decode m keyword)))
 
+(defn generate-query-id []
+  #?(:cljs (.substr (.toString (Math/random) 36) 2 8)
+     :clj (str (UUID/randomUUID))))
+
+(defn- ensure-query-id [event-name trimmed-event]
+  (if (contains? #{:re-graph.core/query :re-graph.core/mutate} event-name)
+    (if (= 3 (count trimmed-event)) ;; query, variables, callback-event
+      (vec (cons (generate-query-id) trimmed-event))
+      trimmed-event)
+    trimmed-event))
+
 (def re-graph-instance
   (->interceptor
    :id ::instance
@@ -40,7 +51,11 @@
                    instance-name (if (contains? re-graph provided-instance-name) provided-instance-name default-instance-name)
                    instance (get re-graph instance-name)
                    event-name (first (get-coeffect ctx ::rfi/untrimmed-event))
-                   trimmed-event (if (= provided-instance-name instance-name) (subvec event 1) event)]
+                   trimmed-event (->> (if (= provided-instance-name instance-name)
+                                        (subvec event 1)
+                                        event)
+                                      (ensure-query-id event-name))]
+
                (cond
                  (= instance ::destroyed-instance)
                  ctx
@@ -84,14 +99,25 @@
       (map? response) (merge response default-errors)
       :else default-errors)))
 
+(re-frame/reg-event-fx
+ ::http-complete
+ interceptors
+ (fn [{:keys [db]} [query-id payload]]
+   (let [callback-event (get-in db [:http-requests query-id :callback])]
+     {:db (update db :subscriptions dissoc query-id)
+      :dispatch (conj callback-event payload)})))
+
 (re-frame/reg-fx
  ::send-http
- (fn [[http-url {:keys [request payload]} callback-fn]]
+ (fn [[instance-name query-id http-url {:keys [request payload]}]]
    #?(:cljs (go (let [response (a/<! (http/post http-url (assoc request :json-params payload)))
                       {:keys [status body error-code]} response]
-                  (if (= :no-error error-code)
-                    (callback-fn body)
-                    (callback-fn (insert-http-status body status)))))
+                  (re-frame/dispatch [::http-complete
+                                      instance-name
+                                      query-id
+                                      (if (= :no-error error-code)
+                                        body
+                                        (insert-http-status body status))])))
       :clj (http/post http-url
                       (-> request
                           (update :headers merge {"Content-Type" "application/json"
@@ -101,11 +127,14 @@
                                   :async? true
                                   :throw-exceptions false}))
                       (fn [{:keys [status body]}]
-                        (if (http/unexceptional-status? status)
-                          (callback-fn body)
-                          (callback-fn (insert-http-status body status))))
+                        (re-frame/dispatch [::http-complete
+                                            instance-name
+                                            query-id
+                                            (if (http/unexceptional-status? status)
+                                              body
+                                              (insert-http-status body status))]))
                       (fn [{:keys [status body]}]
-                        (callback-fn (insert-http-status body status)))))))
+                        (re-frame/dispatch [::http-complete instance-name query-id (insert-http-status body status)]))))))
 
 (re-frame/reg-fx
  ::send-ws
@@ -249,7 +278,3 @@
              ssl? (re-find #"^https" (.-origin js/window.location))]
          (str (if ssl? "wss" "ws") "://" host-and-port "/graphql-ws")))
      :clj nil))
-
-(defn generate-query-id []
-  #?(:cljs (.substr (.toString (Math/random) 36) 2 8)
-     :clj (str (UUID/randomUUID))))
