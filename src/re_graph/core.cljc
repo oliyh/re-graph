@@ -73,6 +73,22 @@
     (re-frame/dispatch (into [::query] (conj (vec (butlast args)) [::internals/callback callback-fn])))))
 
 (re-frame/reg-event-fx
+ ::abort
+ interceptors
+ (fn [{:keys [db]} [query-id]]
+   (merge
+    {:db (-> db
+             (update :subscriptions dissoc query-id)
+             (update :http-requests dissoc query-id))}
+    (when-let [abort-fn (get-in db [:http-requests query-id :abort])]
+      {::internals/call-abort abort-fn}) )))
+
+(defn abort
+  ([query-id] (abort default-instance-name query-id))
+  ([instance-name query-id]
+   (re-frame/dispatch [::abort instance-name query-id])))
+
+(re-frame/reg-event-fx
  ::subscribe
  interceptors
  (fn [{:keys [db instance-name dispatchable-event] :as cofx} [subscription-id query variables callback-event :as event]]

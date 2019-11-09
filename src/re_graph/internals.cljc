@@ -104,37 +104,54 @@
  interceptors
  (fn [{:keys [db]} [query-id payload]]
    (let [callback-event (get-in db [:http-requests query-id :callback])]
-     {:db (update db :subscriptions dissoc query-id)
+     {:db (-> db
+              (update :subscriptions dissoc query-id)
+              (update :http-requests dissoc query-id))
       :dispatch (conj callback-event payload)})))
+
+(re-frame/reg-fx
+ ::call-abort
+ (fn [abort-fn]
+   (abort-fn)))
+
+(re-frame/reg-event-db
+ ::register-abort
+ interceptors
+ (fn [db [query-id abort-fn]]
+   (assoc-in db [:http-requests query-id :abort] abort-fn)))
 
 (re-frame/reg-fx
  ::send-http
  (fn [[instance-name query-id http-url {:keys [request payload]}]]
-   #?(:cljs (go (let [response (a/<! (http/post http-url (assoc request :json-params payload)))
-                      {:keys [status body error-code]} response]
-                  (re-frame/dispatch [::http-complete
-                                      instance-name
-                                      query-id
-                                      (if (= :no-error error-code)
-                                        body
-                                        (insert-http-status body status))])))
-      :clj (http/post http-url
-                      (-> request
-                          (update :headers merge {"Content-Type" "application/json"
-                                                  "Accept" "application/json"})
-                          (merge {:body (encode payload)
-                                  :as :json
-                                  :async? true
-                                  :throw-exceptions false}))
-                      (fn [{:keys [status body]}]
-                        (re-frame/dispatch [::http-complete
-                                            instance-name
-                                            query-id
-                                            (if (http/unexceptional-status? status)
-                                              body
-                                              (insert-http-status body status))]))
-                      (fn [{:keys [status body]}]
-                        (re-frame/dispatch [::http-complete instance-name query-id (insert-http-status body status)]))))))
+   #?(:cljs (let [response-chan (http/post http-url (assoc request :json-params payload))]
+              (re-frame/dispatch [::register-abort instance-name query-id #(http/abort response-chan)])
+
+              (go (let [{:keys [status body error-code]} (a/<! response-chan)]
+                    (re-frame/dispatch [::http-complete
+                                        instance-name
+                                        query-id
+                                        (if (= :no-error error-code)
+                                          body
+                                          (insert-http-status body status))]))))
+
+      :clj (let [future (http/post http-url
+                                   (-> request
+                                       (update :headers merge {"Content-Type" "application/json"
+                                                               "Accept" "application/json"})
+                                       (merge {:body (encode payload)
+                                               :as :json
+                                               :async? true
+                                               :throw-exceptions false}))
+                                   (fn [{:keys [status body]}]
+                                     (re-frame/dispatch [::http-complete
+                                                         instance-name
+                                                         query-id
+                                                         (if (http/unexceptional-status? status)
+                                                           body
+                                                           (insert-http-status body status))]))
+                                   (fn [{:keys [status body]}]
+                                     (re-frame/dispatch [::http-complete instance-name query-id (insert-http-status body status)])))]
+             (re-frame/dispatch [::register-abort instance-name query-id #(.cancel future)])))))
 
 (re-frame/reg-fx
  ::send-ws
