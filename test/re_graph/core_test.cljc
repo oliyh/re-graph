@@ -438,6 +438,26 @@
            (is (= expected-response-payload
                   (::thing @app-db)))))
 
+       (testing "Query error with valid graphql error response, insert status only if not present"
+         (reset! mock-response {:status 400
+                                :body {:errors [{:message "Bad field \"bad1\".",
+                                                 :locations [{:line 2, :column 0}]}
+                                                {:message "Unknown argument \"limit\"."
+                                                 :locations [{:line 2, :column 0}]
+                                                 :extensions {:errcode 999
+                                                              :status 500}}]}
+                                :error-code :http-error})
+         (let [expected-response-payload {:errors [{:message "Bad field \"bad1\"."
+                                                    :locations [{:line 2, :column 0}]
+                                                    :extensions {:status 400}}
+                                                   {:message "Unknown argument \"limit\"."
+                                                    :locations [{:line 2, :column 0}]
+                                                    :extensions {:errcode 999
+                                                                 :status 500}}]}]
+           (dispatch [::re-graph/query query variables [::on-thing]])
+           (is (= expected-response-payload
+                  (::thing @app-db)))))
+
        (testing "No query error, body unchanged"
          (let [expected-response-payload {:data {:things [{:id 1} {:id 2}]}}]
            (reset! mock-response {:status 200
