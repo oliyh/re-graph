@@ -26,6 +26,7 @@
                                          [binaryage/devtools "0.9.10"]
                                          [day8.re-frame/test "0.1.5"]
                                          [com.bhauman/figwheel-main "0.2.1"]
+                                         [clj-http-fake "1.0.3"]
 
                                          ;; gh-pages deploy
                                          [leiningen-core "2.8.1"]]

@@ -7,7 +7,8 @@
              :refer-macros [run-test-sync run-test-async wait-for]]
             [clojure.test :refer [deftest is testing run-tests]
              :refer-macros [deftest is testing run-tests]]
-            #?(:clj [cheshire.core :as json])))
+            #?(:clj [cheshire.core :as json])
+            #?(:clj [clj-http.fake :refer :all])))
 
 (def on-ws-message @#'internals/on-ws-message)
 (def on-open @#'internals/on-open)
@@ -466,6 +467,34 @@
            (dispatch [::re-graph/query query variables [::on-thing]])
            (is (= expected-response-payload
                   (::thing @app-db)))))))))
+
+#?(:clj
+   (defn- run-clj-http-query-error-test [instance-name]
+     (let [dispatch (partial dispatch-to-instance instance-name)]
+       (run-test-sync
+         (let [query                "{ things { id } }"
+               variables            {:some "variable"}
+               http-url             "http://foo.bar/graph-ql"
+               http-response-json   "{\"errors\": [{\"message\": \"OK\", \"extensions\": {\"status\": 404}}]}"
+               http-server-response (fn [request] {:status 400, :body http-response-json})]
+           (init instance-name {:http-url http-url, :ws-url nil})
+
+           (re-frame/reg-event-db
+             ::on-thing
+             (fn [db [_ payload]]
+               (assoc db ::thing payload)))
+
+           (testing "clj-http error returns correct response"
+             (with-fake-routes {http-url http-server-response}
+                               (let [expected-response-payload {:errors [{:message    "OK",
+                                                                          :extensions {:status 404}}]}]
+                                 (dispatch [::re-graph/query query variables [::on-thing]])
+                                 (is (= expected-response-payload
+                                        (::thing @app-db)))))))))))
+
+#?(:clj
+   (deftest clj-http-query-error-test
+     (run-clj-http-query-error-test nil)))
 
 (deftest http-query-error-test
   (run-http-query-error-test nil))
