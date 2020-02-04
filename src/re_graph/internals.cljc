@@ -91,7 +91,7 @@
    2. Response is a map but does not contain a valid errors map: merge in default errors
    3. Response is anything else: return default errors map"
   [response status]
-  (let [f (fn [errors] (mapv #(assoc-in % [:extensions :status] status) errors))
+  (let [f (fn [errors] (mapv (fn [error] (update-in error [:extensions :status] #(or % status))) errors))
         default-errors {:errors [{:message "The HTTP call failed."
                                   :extensions {:status status}}]}]
     (cond
@@ -140,8 +140,10 @@
                                                                "Accept" "application/json"})
                                        (merge {:body (encode payload)
                                                :as :json
+                                               :coerce :always
                                                :async? true
-                                               :throw-exceptions false}))
+                                               :throw-exceptions false
+                                               :throw-entire-message? true}))
                                    (fn [{:keys [status body]}]
                                      (re-frame/dispatch [::http-complete
                                                          instance-name
@@ -149,8 +151,9 @@
                                                          (if (http/unexceptional-status? status)
                                                            body
                                                            (insert-http-status body status))]))
-                                   (fn [{:keys [status body]}]
-                                     (re-frame/dispatch [::http-complete instance-name query-id (insert-http-status body status)])))]
+                                   (fn [exception]
+                                     (let [{:keys [status body]} (ex-data exception)]
+                                       (re-frame/dispatch [::http-complete instance-name query-id (insert-http-status body status)]))))]
              (re-frame/dispatch [::register-abort instance-name query-id #(.cancel future)])))))
 
 (re-frame/reg-fx
