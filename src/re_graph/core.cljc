@@ -52,12 +52,23 @@
            {:errors [{:status 500, :message "GraphQL request timed out", :args args}]}
            result)))))
 
-(defn mutate [& args]
+(defn mutate
+  "Execute a GraphQL mutation. The arguments are:
+
+  [instance-name query-string variables callback]
+
+  If the optional `instance-name` is not provided, the default instance is
+  used. The callback function will receive the result of the mutation as its
+  sole argument."
+  [& args]
   (let [callback-fn (last args)]
     (re-frame/dispatch (into [::mutate] (conj (vec (butlast args)) [::internals/callback callback-fn])))))
 
 #?(:clj
-   (def mutate-sync (partial sync-wrapper mutate 3000)))    ;; 3s timeout
+   (def ^{:doc "Executes a mutation synchronously. Takes the same arguments as
+                `mutate` but without the callback."}
+     mutate-sync
+     (partial sync-wrapper mutate 3000)))    ;; 3s timeout
 
 (re-frame/reg-event-fx
  ::query
@@ -89,12 +100,23 @@
                                 :payload {:query query
                                           :variables variables}}]}))))
 
-(defn query [& args]
+(defn query
+  "Execute a GraphQL query. The arguments are:
+
+  [instance-name query-string variables callback]
+
+  If the optional `instance-name` is not provided, the default instance is
+  used. The callback function will receive the result of the query as its
+  sole argument."
+  [& args]
   (let [callback-fn (last args)]
     (re-frame/dispatch (into [::query] (conj (vec (butlast args)) [::internals/callback callback-fn])))))
 
 #?(:clj
-   (def query-sync (partial sync-wrapper query 3000)))      ;; 3s timeout
+   (def ^{:doc "Executes a query synchronously. Takes the same arguments as
+                `query` but without the callback."}
+     query-sync 
+     (partial sync-wrapper query 3000)))      ;; 3s timeout
 
 (re-frame/reg-event-fx
  ::abort
