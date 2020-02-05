@@ -37,18 +37,24 @@
 #?(:clj
    (defn ^:private sync-wrapper
      "Wraps the given function to allow the GraphQL result to be returned
-      synchronously. Will return a GraphQL error response if the request times
-      out. Will throw if the call returns an exception."
-     [f timeout & args]
-     (let [p        (promise)
+      synchronously. Will return a GraphQL error response if no response is
+      received before the timeout (default 3000ms) expires. Will throw if the
+      call returns an exception."
+     [f & args]
+     (let [timeout  (when (int? (last args)) (last args))
+           timeout' (or timeout 3000)
+           p        (promise)
            callback (fn [result] (deliver p result))
-           args'    (conj (vec args) callback)]
+           args'    (conj (vec (if timeout (butlast args) args))
+                          callback)]
        (apply f args')
 
        ;; explicit timeout to avoid unreliable aborts from underlying implementations
-       (let [result (deref p timeout :timeout)]
-         (if (= :timeout result)
-           {:errors [{:status 500, :message "GraphQL request timed out", :args args}]}
+       (let [result (deref p timeout' ::timeout)]
+         (if (= ::timeout result)
+           {:errors [{:message "re-graph did not receive response from server"
+                      :timeout timeout'
+                      :args args}]}
            result)))))
 
 (defn mutate
@@ -64,10 +70,15 @@
     (re-frame/dispatch (into [::mutate] (conj (vec (butlast args)) [::internals/callback callback-fn])))))
 
 #?(:clj
-   (def ^{:doc "Executes a mutation synchronously. Takes the same arguments as
-                `mutate` but without the callback."}
+   (def
+     ^{:doc "Executes a mutation synchronously. The arguments are:
+
+             [instance-name query-string variables timeout]
+
+             The `instance-name` and `timeout` are optional. The `timeout` is
+             specified in milliseconds."}
      mutate-sync
-     (partial sync-wrapper mutate 3000)))    ;; 3s timeout
+     (partial sync-wrapper mutate)))
 
 (re-frame/reg-event-fx
  ::query
@@ -112,10 +123,15 @@
     (re-frame/dispatch (into [::query] (conj (vec (butlast args)) [::internals/callback callback-fn])))))
 
 #?(:clj
-   (def ^{:doc "Executes a query synchronously. Takes the same arguments as
-                `query` but without the callback."}
+   (def
+     ^{:doc "Executes a query synchronously. The arguments are:
+
+             [instance-name query-string variables timeout]
+
+             The `instance-name` and `timeout` are optional. The `timeout` is
+             specified in milliseconds."}
      query-sync
-     (partial sync-wrapper query 3000)))      ;; 3s timeout
+     (partial sync-wrapper query)))
 
 (re-frame/reg-event-fx
  ::abort
