@@ -34,7 +34,7 @@
                                 :payload {:query query
                                           :variables variables}}]}))))
 
-(defn mutate [args]
+(defn mutate [& args]
   (let [callback-fn (last args)]
     (re-frame/dispatch (into [::mutate] (conj (vec (butlast args)) [::internals/callback callback-fn])))))
 
