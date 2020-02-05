@@ -43,6 +43,7 @@
      (let [p        (promise)
            callback (fn [result] (deliver p result))
            args'    (conj (vec args) callback)]
+       (println f timeout " --> " args')
        (apply f args')
 
        ;; explicit timeout to avoid unreliable aborts from underlying implementations
