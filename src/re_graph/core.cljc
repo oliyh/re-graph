@@ -48,7 +48,7 @@
        ;; explicit timeout to avoid unreliable aborts from underlying implementations
        (let [result (deref p timeout :timeout)]
          (if (= :timeout result)
-           {:errors [{:status 500, :message "graphql request timed out", :args args}]}
+           {:errors [{:status 500, :message "GraphQL request timed out", :args args}]}
            result)))))
 
 (defn mutate [& args]
