@@ -43,7 +43,6 @@
      (let [p        (promise)
            callback (fn [result] (deliver p result))
            args'    (conj (vec args) callback)]
-       (println f timeout " --> " args')
        (apply f args')
 
        ;; explicit timeout to avoid unreliable aborts from underlying implementations
@@ -115,7 +114,7 @@
 #?(:clj
    (def ^{:doc "Executes a query synchronously. Takes the same arguments as
                 `query` but without the callback."}
-     query-sync 
+     query-sync
      (partial sync-wrapper query 3000)))      ;; 3s timeout
 
 (re-frame/reg-event-fx
