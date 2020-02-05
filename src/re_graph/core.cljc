@@ -34,9 +34,29 @@
                                 :payload {:query query
                                           :variables variables}}]}))))
 
+#?(:clj
+   (defn ^:private sync-wrapper
+     "Wraps the given function to allow the GraphQL result to be returned
+      synchronously. Will return a GraphQL error response if the request times
+      out. Will throw if the call returns an exception."
+     [f timeout & args]
+     (let [p        (promise)
+           callback (fn [result] (deliver p result))
+           args'    (conj (vec args) callback)]
+       (apply f args')
+
+       ;; explicit timeout to avoid unreliable aborts from underlying implementations
+       (let [result (deref p timeout :timeout)]
+         (if (= :timeout result)
+           {:errors [{:status 500, :message "graphql request timed out", :args args}]}
+           result)))))
+
 (defn mutate [& args]
   (let [callback-fn (last args)]
     (re-frame/dispatch (into [::mutate] (conj (vec (butlast args)) [::internals/callback callback-fn])))))
+
+#?(:clj
+   (def mutate-sync (partial sync-wrapper mutate 3000)))    ;; 3s timeout
 
 (re-frame/reg-event-fx
  ::query
@@ -71,6 +91,9 @@
 (defn query [& args]
   (let [callback-fn (last args)]
     (re-frame/dispatch (into [::query] (conj (vec (butlast args)) [::internals/callback callback-fn])))))
+
+#?(:clj
+   (def query-sync (partial sync-wrapper query 3000)))      ;; 3s timeout
 
 (re-frame/reg-event-fx
  ::abort
