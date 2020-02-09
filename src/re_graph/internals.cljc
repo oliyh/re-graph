@@ -299,3 +299,26 @@
              ssl? (re-find #"^https" (.-origin js/window.location))]
          (str (if ssl? "wss" "ws") "://" host-and-port "/graphql-ws")))
      :clj nil))
+
+#?(:clj
+   (defn sync-wrapper
+     "Wraps the given function to allow the GraphQL result to be returned
+      synchronously. Will return a GraphQL error response if no response is
+      received before the timeout (default 3000ms) expires. Will throw if the
+      call returns an exception."
+     [f & args]
+     (let [timeout  (when (int? (last args)) (last args))
+           timeout' (or timeout 3000)
+           p        (promise)
+           callback (fn [result] (deliver p result))
+           args'    (conj (vec (if timeout (butlast args) args))
+                          callback)]
+       (apply f args')
+
+       ;; explicit timeout to avoid unreliable aborts from underlying implementations
+       (let [result (deref p timeout' ::timeout)]
+         (if (= ::timeout result)
+           {:errors [{:message "re-graph did not receive response from server"
+                      :timeout timeout'
+                      :args args}]}
+           result)))))
