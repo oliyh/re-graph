@@ -34,9 +34,51 @@
                                 :payload {:query query
                                           :variables variables}}]}))))
 
-(defn mutate [& args]
+#?(:clj
+   (defn ^:private sync-wrapper
+     "Wraps the given function to allow the GraphQL result to be returned
+      synchronously. Will return a GraphQL error response if no response is
+      received before the timeout (default 3000ms) expires. Will throw if the
+      call returns an exception."
+     [f & args]
+     (let [timeout  (when (int? (last args)) (last args))
+           timeout' (or timeout 3000)
+           p        (promise)
+           callback (fn [result] (deliver p result))
+           args'    (conj (vec (if timeout (butlast args) args))
+                          callback)]
+       (apply f args')
+
+       ;; explicit timeout to avoid unreliable aborts from underlying implementations
+       (let [result (deref p timeout' ::timeout)]
+         (if (= ::timeout result)
+           {:errors [{:message "re-graph did not receive response from server"
+                      :timeout timeout'
+                      :args args}]}
+           result)))))
+
+(defn mutate
+  "Execute a GraphQL mutation. The arguments are:
+
+  [instance-name query-string variables callback]
+
+  If the optional `instance-name` is not provided, the default instance is
+  used. The callback function will receive the result of the mutation as its
+  sole argument."
+  [& args]
   (let [callback-fn (last args)]
     (re-frame/dispatch (into [::mutate] (conj (vec (butlast args)) [::internals/callback callback-fn])))))
+
+#?(:clj
+   (def
+     ^{:doc "Executes a mutation synchronously. The arguments are:
+
+             [instance-name query-string variables timeout]
+
+             The `instance-name` and `timeout` are optional. The `timeout` is
+             specified in milliseconds."}
+     mutate-sync
+     (partial sync-wrapper mutate)))
 
 (re-frame/reg-event-fx
  ::query
@@ -68,9 +110,28 @@
                                 :payload {:query query
                                           :variables variables}}]}))))
 
-(defn query [& args]
+(defn query
+  "Execute a GraphQL query. The arguments are:
+
+  [instance-name query-string variables callback]
+
+  If the optional `instance-name` is not provided, the default instance is
+  used. The callback function will receive the result of the query as its
+  sole argument."
+  [& args]
   (let [callback-fn (last args)]
     (re-frame/dispatch (into [::query] (conj (vec (butlast args)) [::internals/callback callback-fn])))))
+
+#?(:clj
+   (def
+     ^{:doc "Executes a query synchronously. The arguments are:
+
+             [instance-name query-string variables timeout]
+
+             The `instance-name` and `timeout` are optional. The `timeout` is
+             specified in milliseconds."}
+     query-sync
+     (partial sync-wrapper query)))
 
 (re-frame/reg-event-fx
  ::abort
