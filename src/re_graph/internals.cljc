@@ -4,8 +4,9 @@
             [re-frame.std-interceptors :as rfi]
             [re-frame.interop :refer [empty-queue]]
             [re-graph.logging :as log]
-            #?(:cljs [cljs-http.client :as http]
-               :clj  [clj-http.client :as http])
+            #?@(:cljs [[cljs-http.client :as http]
+                       [cljs-http.core :as http-core]]
+                :clj  [[clj-http.client :as http]])
             #?(:cljs [clojure.core.async :as a]
                :clj  [clojure.core.async :refer [go] :as a])
             #?(:clj [gniazdo.core :as ws])
@@ -124,7 +125,7 @@
  ::send-http
  (fn [[instance-name query-id http-url {:keys [request payload]}]]
    #?(:cljs (let [response-chan (http/post http-url (assoc request :json-params payload))]
-              (re-frame/dispatch [::register-abort instance-name query-id #(http/abort response-chan)])
+              (re-frame/dispatch [::register-abort instance-name query-id #(http-core/abort! response-chan)])
 
               (go (let [{:keys [status body error-code]} (a/<! response-chan)]
                     (re-frame/dispatch [::http-complete
