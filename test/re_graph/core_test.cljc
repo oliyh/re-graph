@@ -8,7 +8,7 @@
             [clojure.test :refer [deftest is testing run-tests]
              :refer-macros [deftest is testing run-tests]]
             #?(:clj [cheshire.core :as json])
-            #?(:clj [clj-http.fake :refer :all])))
+            #?(:clj [clj-http.fake :refer [with-fake-routes]])))
 
 (def on-ws-message @#'internals/on-ws-message)
 (def on-open @#'internals/on-open)
@@ -588,7 +588,8 @@
         init (if instance-name (partial re-graph/init instance-name) re-graph/init)
         subscribe (if instance-name (partial re-graph/subscribe instance-name) re-graph/subscribe)
         unsubscribe (if instance-name (partial re-graph/unsubscribe instance-name) re-graph/unsubscribe)
-        query (if instance-name (partial re-graph/query instance-name) re-graph/query)]
+        query (if instance-name (partial re-graph/query instance-name) re-graph/query)
+        mutate (if instance-name (partial re-graph/mutate instance-name) re-graph/mutate)]
 
     (testing "can call normal functions instead of needing re-frame")
 
@@ -639,33 +640,63 @@
            (is (nil? (get-in (db-instance) [:subscriptions "my-sub"])))))))
 
     (testing "using http"
-      (run-test-sync
-       (let [expected-http-url "http://foo.bar/graph-ql"
-             expected-query-payload {:query "query { things { id } }"
-                                     :variables {:some "variable"}}
-             expected-response-payload {:data {:things [{:id 1} {:id 2}]}}
-             callback-called? (atom false)
-             callback-fn (fn [payload]
-                           (reset! callback-called? true)
-                           (is (= expected-response-payload payload)))]
+      (testing "queries"
+        (run-test-sync
+         (let [expected-http-url "http://foo.bar/graph-ql"
+               expected-query-payload {:query "query { things { id } }"
+                                       :variables {:some "variable"}}
+               expected-response-payload {:data {:things [{:id 1} {:id 2}]}}
+               callback-called? (atom false)
+               callback-fn (fn [payload]
+                             (reset! callback-called? true)
+                             (is (= expected-response-payload payload)))]
 
-         (init {:http-url expected-http-url
-                :ws-url nil})
+           (init {:http-url expected-http-url
+                  :ws-url nil})
 
-         (re-frame/reg-fx
-          ::internals/send-http
-          (fn [[_ _ http-url {:keys [payload]} :as fx-args]]
-            (is (= expected-query-payload
-                   payload))
+           (re-frame/reg-fx
+            ::internals/send-http
+            (fn [[_ _ http-url {:keys [payload]} :as fx-args]]
+              (is (= expected-query-payload
+                     payload))
 
-            (is (= expected-http-url http-url))
+              (is (= expected-http-url http-url))
 
-            (dispatch-response fx-args expected-response-payload)))
+              (dispatch-response fx-args expected-response-payload)))
 
-         (query "{ things { id } }" {:some "variable"} callback-fn)
+           (query "{ things { id } }" {:some "variable"} callback-fn)
 
-         (testing "responses are sent to the callback"
-           (is @callback-called?)))))))
+           (testing "responses are sent to the callback"
+             (is @callback-called?)))))
+
+      (testing "mutations"
+        (run-test-sync
+         (let [expected-http-url "http://foo.bar/graph-ql"
+               expected-query-payload {:query "mutation { things { id } }"
+                                       :variables {:some "variable"}}
+               expected-response-payload {:data {:things [{:id 1} {:id 2}]}}
+               callback-called? (atom false)
+               callback-fn (fn [payload]
+                             (reset! callback-called? true)
+                             (is (= expected-response-payload payload)))]
+
+           (init {:http-url expected-http-url
+                  :ws-url nil})
+
+           (re-frame/reg-fx
+            ::internals/send-http
+            (fn [[_ _ http-url {:keys [payload]} :as fx-args]]
+              (is (= expected-query-payload
+                     payload))
+
+              (is (= expected-http-url http-url))
+
+              (dispatch-response fx-args expected-response-payload)))
+
+           (mutate "{ things { id } }" {:some "variable"} callback-fn)
+
+           (testing "responses are sent to the callback"
+             (is @callback-called?))))))))
 
 (deftest non-re-frame-test
   (run-non-re-frame-test nil))
