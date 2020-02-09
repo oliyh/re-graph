@@ -269,12 +269,12 @@
  interceptors
  (fn [{:keys [db instance-name]} _]
    (when-not (get-in db [:websocket :ready?])
-     {::connect-ws [instance-name (get-in db [:websocket :url])]})))
+     {::connect-ws [instance-name (get-in db [:websocket :url]) (get-in db [:websocket :sub-protocol])]})))
 
 (re-frame/reg-fx
  ::connect-ws
- (fn [[instance-name ws-url]]
-   #?(:cljs (let [ws (js/WebSocket. ws-url "graphql-ws")]
+ (fn [[instance-name ws-url sub-protocol]]
+   #?(:cljs (let [ws (js/WebSocket. ws-url sub-protocol)]
               (aset ws "onmessage" (on-ws-message instance-name))
               (aset ws "onopen" (on-open instance-name ws))
               (aset ws "onclose" (on-close instance-name))
@@ -283,7 +283,7 @@
                                 :on-receive (on-ws-message instance-name)
                                 :on-close (on-close instance-name)
                                 :on-error (on-error instance-name)
-                                :subprotocols ["graphql-ws"])]
+                                :subprotocols [sub-protocol])]
              ((on-open instance-name ws))))))
 
 (re-frame/reg-fx
