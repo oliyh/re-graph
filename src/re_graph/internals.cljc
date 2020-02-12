@@ -76,7 +76,7 @@
                      ctx))))))
 
 (def interceptors
-  [re-frame/debug re-frame/trim-v re-graph-instance])
+  [re-frame/trim-v re-graph-instance])
 
 (defn- valid-graphql-errors?
   "Validates that response has a valid GraphQL errors map"
@@ -284,8 +284,6 @@
       :clj  (ws/websocket ws-url {:on-open      (on-open instance-name)
                                   :on-message   (let [callback (on-ws-message instance-name)]
                                                   (fn [_ws message _last?]
-                                                    (log/error "on-message callback 1" message)
-                                                    (log/error "on-message callback 2" (-> message str message->data))
                                                     (callback (str message))))
                                   :on-close     (on-close instance-name)
                                   :on-error     (let [callback (on-error instance-name)]
