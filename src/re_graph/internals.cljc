@@ -284,6 +284,7 @@
       :clj  (ws/websocket ws-url {:on-open      (on-open instance-name)
                                   :on-message   (let [callback (on-ws-message instance-name)]
                                                   (fn [_ws data _last?]
+                                                    (log/error "on-message callback" _ws "---" data "---" _last?)
                                                     (callback data)))
                                   :on-close     (on-close instance-name)
                                   :on-error     (let [callback (on-error instance-name)]
