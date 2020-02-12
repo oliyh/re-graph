@@ -281,16 +281,15 @@
               (aset ws "onopen" (on-open instance-name ws))
               (aset ws "onclose" (on-close instance-name))
               (aset ws "onerror" (on-error instance-name)))
-      :clj (let [ws (ws/websocket ws-url
-                                  {:on-message   (let [callback (on-ws-message instance-name)]
-                                                   (fn [_ws data _last?]
-                                                     (callback data)))
-                                   :on-close     (on-close instance-name)
-                                   :on-error     (let [callback (on-error instance-name)]
-                                                   (fn [_ws error]
-                                                     (callback error)))
-                                   :subprotocols [sub-protocol]})]
-             ((on-open instance-name ws))))))
+      :clj  (ws/websocket ws-url {:on-open      (on-open instance-name)
+                                  :on-message   (let [callback (on-ws-message instance-name)]
+                                                  (fn [_ws data _last?]
+                                                    (callback data)))
+                                  :on-close     (on-close instance-name)
+                                  :on-error     (let [callback (on-error instance-name)]
+                                                  (fn [_ws error]
+                                                    (callback error)))
+                                  :subprotocols [sub-protocol]}))))
 
 (re-frame/reg-fx
  ::disconnect-ws
