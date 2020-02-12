@@ -76,7 +76,7 @@
                      ctx))))))
 
 (def interceptors
-  [re-frame/trim-v re-graph-instance])
+  [re-frame/debug re-frame/trim-v re-graph-instance])
 
 (defn- valid-graphql-errors?
   "Validates that response has a valid GraphQL errors map"
