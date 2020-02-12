@@ -6,10 +6,10 @@
             [re-graph.logging :as log]
             #?@(:cljs [[cljs-http.client :as http]
                        [cljs-http.core :as http-core]]
-                :clj  [[clj-http.client :as http]])
+                :clj  [[hato.client :as http]])
             #?(:cljs [clojure.core.async :as a]
                :clj  [clojure.core.async :refer [go] :as a])
-            #?(:clj [gniazdo.core :as ws])
+            #?(:clj [hato.websocket :as ws])
             #?(:clj [cheshire.core :as json]))
   #?(:cljs (:require-macros [cljs.core.async.macros :refer [go]]))
   #?(:clj (:import [java.util UUID])))
@@ -121,6 +121,9 @@
  (fn [db [query-id abort-fn]]
    (assoc-in db [:http-requests query-id :abort] abort-fn)))
 
+(def unexceptional-status?
+  #{200 201 202 203 204 205 206 207 300 301 302 303 304 307})
+
 (re-frame/reg-fx
  ::send-http
  (fn [[instance-name query-id http-url {:keys [request payload]}]]
@@ -143,13 +146,12 @@
                                                :as :json
                                                :coerce :always
                                                :async? true
-                                               :throw-exceptions false
-                                               :throw-entire-message? true}))
+                                               :throw-exceptions false}))
                                    (fn [{:keys [status body]}]
                                      (re-frame/dispatch [::http-complete
                                                          instance-name
                                                          query-id
-                                                         (if (http/unexceptional-status? status)
+                                                         (if (unexceptional-status? status)
                                                            body
                                                            (insert-http-status body status))]))
                                    (fn [exception]
@@ -161,7 +163,7 @@
  ::send-ws
  (fn [[websocket payload]]
    #?(:cljs (.send websocket (encode payload))
-      :clj (ws/send-msg websocket (encode payload)))))
+      :clj (ws/send! websocket (encode payload)))))
 
 (re-frame/reg-fx
  ::call-callback
@@ -279,18 +281,22 @@
               (aset ws "onopen" (on-open instance-name ws))
               (aset ws "onclose" (on-close instance-name))
               (aset ws "onerror" (on-error instance-name)))
-      :clj (let [ws (ws/connect ws-url
-                                :on-receive (on-ws-message instance-name)
-                                :on-close (on-close instance-name)
-                                :on-error (on-error instance-name)
-                                :subprotocols [sub-protocol])]
+      :clj (let [ws (ws/websocket ws-url
+                                  {:on-message   (let [callback (on-ws-message instance-name)]
+                                                   (fn [_ws data _last?]
+                                                     (callback data)))
+                                   :on-close     (on-close instance-name)
+                                   :on-error     (let [callback (on-error instance-name)]
+                                                   (fn [_ws error]
+                                                     (callback error)))
+                                   :subprotocols [sub-protocol]})]
              ((on-open instance-name ws))))))
 
 (re-frame/reg-fx
  ::disconnect-ws
  (fn [[ws]]
    #?(:cljs (.close ws)
-      :clj (ws/close ws))))
+      :clj (ws/close! ws))))
 
 (defn default-ws-url []
   #?(:cljs
