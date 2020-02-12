@@ -286,7 +286,6 @@
                                                   (fn [_ws message _last?]
                                                     (log/error "on-message callback 1" message)
                                                     (log/error "on-message callback 2" (-> message str message->data))
-                                                    (log/error "on-message callback 3" (message->data message))
                                                     (callback (str message))))
                                   :on-close     (on-close instance-name)
                                   :on-error     (let [callback (on-error instance-name)]
