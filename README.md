@@ -26,7 +26,7 @@ Add re-graph to your project's dependencies:
 Call the `init` function to bootstrap it and then use `subscribe`, `unsubscribe`, `query` and `mutate` functions:
 
 ```clojure
-(require [re-graph.core :as re-graph])
+(require '[re-graph.core :as re-graph])
 
 ;; initialise re-graph, possibly including configuration options (see below)
 (re-graph/init {})
