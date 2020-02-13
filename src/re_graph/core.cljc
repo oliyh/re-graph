@@ -193,13 +193,14 @@
                                 :else
                                 [instance-name opts])
          {:keys [ws-url ws-sub-protocol ws-reconnect-timeout
-                 resume-subscriptions? connection-init-payload
+                 resume-subscriptions? connection-init-payload ws-parameters
                  http-url http-parameters]
           :or {ws-url (internals/default-ws-url)
                ws-sub-protocol "graphql-ws"
                ws-reconnect-timeout 5000
                resume-subscriptions? true
                connection-init-payload {}
+               ws-parameters {}
 
                http-parameters {}
                http-url "/graphql"}} opts]
@@ -214,12 +215,13 @@
                                      :connection-init-payload connection-init-payload
                                      :queue []
                                      :reconnect-timeout ws-reconnect-timeout
-                                     :resume-subscriptions? resume-subscriptions?}})
+                                     :resume-subscriptions? resume-subscriptions?
+                                     :ws-parameters ws-parameters}})
                       (when http-url
                         {:http-url http-url
                          :http-parameters http-parameters})))}
       (when ws-url
-        {::internals/connect-ws [instance-name ws-url ws-sub-protocol]})))))
+        {::internals/connect-ws [instance-name ws-url ws-sub-protocol ws-parameters]})))))
 
 (re-frame/reg-event-fx
  ::destroy

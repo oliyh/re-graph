@@ -271,25 +271,28 @@
  interceptors
  (fn [{:keys [db instance-name]} _]
    (when-not (get-in db [:websocket :ready?])
-     {::connect-ws [instance-name (get-in db [:websocket :url]) (get-in db [:websocket :sub-protocol])]})))
+     {::connect-ws [instance-name
+                    (get-in db [:websocket :url])
+                    (get-in db [:websocket :sub-protocol])
+                    (get-in db [:websocket :ws-parameters])]})))
 
 (re-frame/reg-fx
  ::connect-ws
- (fn [[instance-name ws-url sub-protocol]]
+ (fn [[instance-name ws-url sub-protocol ws-parameters]]
    #?(:cljs (let [ws (js/WebSocket. ws-url sub-protocol)]
               (aset ws "onmessage" (on-ws-message instance-name))
               (aset ws "onopen" (on-open instance-name ws))
               (aset ws "onclose" (on-close instance-name))
               (aset ws "onerror" (on-error instance-name)))
-      :clj  (ws/websocket ws-url {:on-open      (on-open instance-name)
-                                  :on-message   (let [callback (on-ws-message instance-name)]
-                                                  (fn [_ws message _last?]
-                                                    (callback (str message))))
-                                  :on-close     (on-close instance-name)
-                                  :on-error     (let [callback (on-error instance-name)]
-                                                  (fn [_ws error]
-                                                    (callback error)))
-                                  :subprotocols [sub-protocol]}))))
+      :clj  (ws/websocket ws-url (merge ws-parameters {:on-open      (on-open instance-name)
+                                                       :on-message   (let [callback (on-ws-message instance-name)]
+                                                                       (fn [_ws message _last?]
+                                                                         (callback (str message))))
+                                                       :on-close     (on-close instance-name)
+                                                       :on-error     (let [callback (on-error instance-name)]
+                                                                       (fn [_ws error]
+                                                                         (callback error)))
+                                                       :subprotocols [sub-protocol]})))))
 
 (re-frame/reg-fx
  ::disconnect-ws
