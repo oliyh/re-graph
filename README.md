@@ -141,6 +141,34 @@ All function/event signatures now take an optional instance-name as the first ar
 (re-graph/unsubscribe :service-b :my-subscription-id)
 ```
 
+## Cookie Management
+
+When using re-graph within a browser, cookies are shared between HTTP and WebSocket connection automatically. There's nothing special that needs to be done.
+
+When using re-graph with Clojure, however, some configuration is necessary to ensure that the same cookie store is used for both HTTP and WebSocket connections.
+
+Before initializing re-graph, create a common HTTP client.
+
+```
+(ns user
+  (:require
+    [hato.client :as hc]
+    [re-graph.core :as re-graph]))
+
+(def http-client (hc/build-http-client {:cookie-policy :all}))
+```
+
+See the [hato documentation](https://github.com/gnarroway/hato) for all the supported configuration options.
+
+When initializing re-graph, configure both the HTTP and WebSocket connections with this client:
+
+```
+(re-graph/init {:http-parameters {:http-client http-client}
+                :ws-parameters   {:http-client http-client}})
+```
+
+In the call, you can provide any supported re-graph or hato options. Be careful though; hato convenience options for the HTTP client will be ignored when using the `:http-client` option.
+
 ## Development
 
 `cider-jack-in-clj&cljs`
