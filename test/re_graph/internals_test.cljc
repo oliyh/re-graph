@@ -15,8 +15,10 @@
 
       (is (= (merge internals/ws-initial-state internals/ws-default-options) (:ws (internals/ws-options {:ws {}}))))
 
-      (let [test-url "ws://example.org/graphql-ws"]
-        (is (= test-url) (get-in [:ws :url] (internals/ws-options {:ws {:url test-url}})))))
+      (let [test-url "ws://example.org/graphql-ws"
+            options  (internals/ws-options {:ws {:url test-url}})]
+        (is (= test-url (get-in options [:ws :url])))
+        (is (= "graphql-ws" (get-in options [:ws :sub-protocol])))))
 
     (testing "HTTP options"
       (is (nil? (internals/http-options {:http nil})))
@@ -24,8 +26,9 @@
 
       (is (= (merge internals/http-initial-state internals/http-default-options) (:http (internals/http-options {:http {}}))))
 
-      (let [test-url "http://example.org/graphql"]
-        (is (= test-url) (get-in [:http :url] (internals/http-options {:http {:url test-url}})))))))
+      (let [test-url "http://example.org/graphql"
+            options  (internals/http-options {:http {:url test-url}})]
+        (is (= test-url (get-in options [:http :url])))))))
 
 (deftest options-test
   (run-options-test))

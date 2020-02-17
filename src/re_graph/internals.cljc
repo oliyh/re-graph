@@ -276,6 +276,7 @@
 (re-frame/reg-fx
   ::connect-ws
   (fn [[instance-name {:keys [url sub-protocol impl]}]]
+    (println "DEBUG DEBUG DEBUG: " url " " sub-protocol " " impl)
     #?(:cljs (let [ws (js/WebSocket. url sub-protocol)]
                (aset ws "onmessage" (on-ws-message instance-name))
                (aset ws "onopen" (on-open instance-name ws))
