@@ -104,10 +104,10 @@
  ::http-complete
  interceptors
  (fn [{:keys [db]} [query-id payload]]
-   (let [callback-event (get-in db [:http-requests query-id :callback])]
-     {:db (-> db
-              (update :subscriptions dissoc query-id)
-              (update :http-requests dissoc query-id))
+   (let [callback-event (get-in db [:http :requests query-id :callback])]
+     {:db       (-> db
+                    (update :subscriptions dissoc query-id)
+                    (update-in [:http :requests] dissoc query-id))
       :dispatch (conj callback-event payload)})))
 
 (re-frame/reg-fx
@@ -119,7 +119,7 @@
  ::register-abort
  interceptors
  (fn [db [query-id abort-fn]]
-   (assoc-in db [:http-requests query-id :abort] abort-fn)))
+   (assoc-in db [:http :requests query-id :abort] abort-fn)))
 
 (def unexceptional-status?
   #{200 201 202 203 204 205 206 207 300 301 302 303 304 307})
@@ -193,8 +193,8 @@
  ::connection-init
  interceptors
   (fn [{:keys [db]} _]
-    (let [ws (get-in db [:websocket :connection])
-          payload (get-in db [:websocket :connection-init-payload])]
+    (let [ws (get-in db [:ws :connection])
+          payload (get-in db [:ws :connection-init-payload])]
       (when payload
         {::send-ws [ws {:type "connection_init"
                         :payload payload}]}))))
@@ -204,15 +204,15 @@
  interceptors
  (fn [{:keys [db instance-name]} [ws]]
    (merge
-    {:db (update db :websocket
+    {:db (update db :ws
                     assoc
                     :connection ws
                     :ready? true
                     :queue [])}
 
-    (let [resume? (get-in db [:websocket :resume-subscriptions?])
+    (let [resume? (get-in db [:ws :resume-subscriptions?])
           subscriptions (when resume? (->> db :subscriptions vals (map :event)))
-          queue (get-in db [:websocket :queue])
+          queue (get-in db [:ws :queue])
           to-send (concat [[::connection-init instance-name]] subscriptions queue)]
       {:dispatch-n to-send}))))
 
@@ -228,10 +228,10 @@
  (fn [{:keys [db instance-name]} _]
    (merge
     {:db (let [new-db (-> db
-                          (assoc-in [:websocket :ready?] false)
+                          (assoc-in [:ws :ready?] false)
                           (update :subscriptions deactivate-subscriptions))]
            new-db)}
-    (when-let [reconnect-timeout (get-in db [:websocket :reconnect-timeout])]
+    (when-let [reconnect-timeout (get-in db [:ws :reconnect-timeout])]
       {:dispatch-later [{:ms reconnect-timeout
                          :dispatch [::reconnect-ws instance-name]}]}))))
 
@@ -252,11 +252,11 @@
 
 (defn- on-open
   ([instance-name]
-   (fn [ws]
-     ((on-open instance-name ws))))
-  ([instance-name ws]
+   (fn [websocket]
+     ((on-open instance-name websocket))))
+  ([instance-name websocket]
    (fn []
-     (re-frame/dispatch [::on-ws-open instance-name ws]))))
+     (re-frame/dispatch [::on-ws-open instance-name websocket]))))
 
 (defn- on-close [instance-name]
   (fn [& args]
@@ -270,29 +270,26 @@
  ::reconnect-ws
  interceptors
  (fn [{:keys [db instance-name]} _]
-   (when-not (get-in db [:websocket :ready?])
-     {::connect-ws [instance-name
-                    (get-in db [:websocket :url])
-                    (get-in db [:websocket :sub-protocol])
-                    (get-in db [:websocket :ws-parameters])]})))
+   (when-not (get-in db [:ws :ready?])
+     {::connect-ws [instance-name (:ws db)]})))
 
 (re-frame/reg-fx
- ::connect-ws
- (fn [[instance-name ws-url sub-protocol ws-parameters]]
-   #?(:cljs (let [ws (js/WebSocket. ws-url sub-protocol)]
-              (aset ws "onmessage" (on-ws-message instance-name))
-              (aset ws "onopen" (on-open instance-name ws))
-              (aset ws "onclose" (on-close instance-name))
-              (aset ws "onerror" (on-error instance-name)))
-      :clj  (ws/websocket ws-url (merge ws-parameters {:on-open      (on-open instance-name)
-                                                       :on-message   (let [callback (on-ws-message instance-name)]
-                                                                       (fn [_ws message _last?]
-                                                                         (callback (str message))))
-                                                       :on-close     (on-close instance-name)
-                                                       :on-error     (let [callback (on-error instance-name)]
-                                                                       (fn [_ws error]
-                                                                         (callback error)))
-                                                       :subprotocols [sub-protocol]})))))
+  ::connect-ws
+  (fn [[instance-name {:keys [url sub-protocol impl]}]]
+    #?(:cljs (let [ws (js/WebSocket. url sub-protocol)]
+               (aset ws "onmessage" (on-ws-message instance-name))
+               (aset ws "onopen" (on-open instance-name ws))
+               (aset ws "onclose" (on-close instance-name))
+               (aset ws "onerror" (on-error instance-name)))
+       :clj  (ws/websocket url (merge impl {:on-open      (on-open instance-name)
+                                            :on-message   (let [callback (on-ws-message instance-name)]
+                                                            (fn [_ws message _last?]
+                                                              (callback (str message))))
+                                            :on-close     (on-close instance-name)
+                                            :on-error     (let [callback (on-error instance-name)]
+                                                            (fn [_ws error]
+                                                              (callback error)))
+                                            :subprotocols [sub-protocol]})))))
 
 (re-frame/reg-fx
  ::disconnect-ws
@@ -300,13 +297,49 @@
    #?(:cljs (.close ws)
       :clj (ws/close! ws))))
 
-(defn default-ws-url []
+(defn default-url
+  [protocol path]
   #?(:cljs
-     (when (and (exists? js/window) (exists? (.-location js/window)))
-       (let [host-and-port (.-host js/window.location)
-             ssl? (re-find #"^https" (.-origin js/window.location))]
-         (str (if ssl? "wss" "ws") "://" host-and-port "/graphql-ws")))
-     :clj nil))
+          (when (and (exists? js/window) (exists? (.-location js/window)))
+            (let [host-and-port (.-host js/window.location)
+                  ssl? (re-find #"^https" (.-origin js/window.location))]
+              (str protocol (if ssl? "s" "") "://" host-and-port "/" path)))
+     :clj
+          (str protocol "://localhost/" path)))
+
+(def ws-default-options
+  {:url (default-url "ws" "graphql-ws")
+   :sub-protocol "graphql-ws"
+   :reconnect-timeout 5000
+   :resume-subscriptions? true
+   :connection-init-payload {}
+   :impl {}})
+
+(def ws-initial-state
+  {:ready? false
+   :queue []
+   :connection nil})
+
+(defn ws-options
+  [{:keys [ws] :or {ws {}} :as _options}]
+  (when ws
+    (let [{:keys [url] :as ws-options} (merge ws-default-options ws ws-initial-state)]
+      (when url
+        {:ws ws-options}))))
+
+(def http-default-options
+  {:url (default-url "http" "graphql")
+   :impl {}})
+
+(def http-initial-state
+  {:requests {}})
+
+(defn http-options
+  [{:keys [http] :or {http {}} :as options}]
+  (when http
+    (let [{:keys [url] :as http-options} (merge http-default-options http http-initial-state)]
+      (when url
+        {:http http-options}))))
 
 #?(:clj
    (defn sync-wrapper

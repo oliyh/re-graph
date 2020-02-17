@@ -1,0 +1,31 @@
+(ns re-graph.internals-test
+  (:require [re-graph.internals :as internals]
+            [day8.re-frame.test :refer [run-test-sync run-test-async wait-for]
+             :refer-macros [run-test-sync run-test-async wait-for]]
+            [clojure.test :refer [deftest is testing run-tests]
+             :refer-macros [deftest is testing run-tests]]))
+
+(defn- run-options-test
+  []
+  (run-test-sync
+
+    (testing "WebSocket options"
+      (is (nil? (internals/ws-options {:ws nil})))
+      (is (nil? (internals/ws-options {:ws {:url nil}})))
+
+      (is (= (merge internals/ws-initial-state internals/ws-default-options) (:ws (internals/ws-options {:ws {}}))))
+
+      (let [test-url "ws://example.org/graphql-ws"]
+        (is (= test-url) (get-in [:ws :url] (internals/ws-options {:ws {:url test-url}})))))
+
+    (testing "HTTP options"
+      (is (nil? (internals/http-options {:http nil})))
+      (is (nil? (internals/http-options {:http {:url nil}})))
+
+      (is (= (merge internals/http-initial-state internals/http-default-options) (:http (internals/http-options {:http {}}))))
+
+      (let [test-url "http://example.org/graphql"]
+        (is (= test-url) (get-in [:http :url] (internals/http-options {:http {:url test-url}})))))))
+
+(deftest options-test
+  (run-options-test))

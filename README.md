@@ -90,17 +90,21 @@ Options can be passed to the init event, with the following possibilities:
 ```clojure
 (re-frame/dispatch
   [::re-graph/init
-    {:ws-url                  "wss://foo.io/graphql-ws" ;; override the websocket url (defaults to /graphql-ws, nil to disable)
-     :ws-sub-protocol         "graphql-ws"              ;; override the websocket sub-protocol
-     :ws-reconnect-timeout    2000                      ;; attempt reconnect n milliseconds after disconnect (default 5000, nil to disable)
-     :resume-subscriptions?   true                      ;; start existing subscriptions again when websocket is reconnected after a disconnect
-     :connection-init-payload {}                        ;; the payload to send in the connection_init message, sent when a websocket connection is made
+    {:ws {:url                     "wss://foo.io/graphql-ws" ;; override the websocket url (defaults to /graphql-ws, nil to disable)
+          :sub-protocol            "graphql-ws"              ;; override the websocket sub-protocol (defaults to "graphql-ws")
+          :reconnect-timeout       5000                      ;; attempt reconnect n milliseconds after disconnect (defaults to 5000, nil to disable)
+          :resume-subscriptions?   true                      ;; start existing subscriptions again when websocket is reconnected after a disconnect (defaults to true)
+          :connection-init-payload {}                        ;; the payload to send in the connection_init message, sent when a websocket connection is made (defaults to {})
+          :impl                    {}                        ;; implementation-specific options (see hato for options, defaults to {})
+         }
 
-     :http-url                "http://bar.io/graphql"   ;; override the http url (defaults to /graphql)
-     :http-parameters         {:with-credentials? false ;; any parameters to be merged with the request, see cljs-http for options
-                               :oauth-token "Secret"}
+     :http {:url    "http://bar.io/graphql"   ;; override the http url (defaults to /graphql)
+           {:impl   {}                        ;; implementation-specific options (see cljs-http or hato for options, defaults to {})
+           }
   }])
 ```
+
+Either `:ws` or `:http` can be set to nil to disable the WebSocket or HTTP protocols.
 
 ### Multiple instances
 

@@ -21,7 +21,7 @@
 
 (re-frame/reg-fx
  ::internals/connect-ws
- (fn [[instance-name & args]]
+ (fn [[instance-name _options]]
    ((on-open instance-name ::websocket-connection))))
 
 (defn- prepend-instance-name [instance-name [event-name & args :as event]]
@@ -42,8 +42,8 @@
         db-instance #(get-in @app-db [:re-graph (or instance-name default-instance-name)])
         on-ws-message (on-ws-message (or instance-name default-instance-name))]
     (run-test-sync
-     (init instance-name {:connection-init-payload nil
-                          :ws-url "ws://socket.rocket"})
+     (init instance-name {:ws {:url                     "ws://socket.rocket"
+                               :connection-init-payload nil}})
 
      (let [expected-subscription-payload {:id "my-sub"
                                           :type "start"
@@ -138,15 +138,15 @@
                                           :payload {:query "subscription { things { id } }"
                                                     :variables {:some "variable"}}}]
 
-       (init instance-name {:connection-init-payload init-payload
-                            :ws-url "ws://socket.rocket"})
+       (init instance-name {:ws {:url                     "ws://socket.rocket"
+                                 :connection-init-payload init-payload}})
 
        (testing "messages are queued when websocket isn't ready"
 
          (dispatch [::re-graph/subscribe :my-sub "{ things { id } }" {:some "variable"} [::on-thing]])
          (dispatch [::re-graph/query "{ more_things { id } }" {:some "other-variable"} [::on-thing]])
 
-         (is (= 2 (count (get-in (db-instance) [:websocket :queue]))))
+         (is (= 2 (count (get-in (db-instance) [:ws :queue]))))
 
          (testing "and sent when websocket opens"
 
@@ -173,7 +173,7 @@
                                               :variables {:some "other-variable"}}}]
                     ((juxt first (comp #(dissoc % :id) second)) (last @ws-messages)))))
 
-           (is (empty? (get-in (db-instance) [:websocket :queue]))))))
+           (is (empty? (get-in (db-instance) [:ws :queue]))))))
 
      (testing "when re-graph is destroyed"
        (testing "the subscriptions are cancelled"
@@ -215,13 +215,13 @@
         (re-frame/dispatch dispatch)))
 
      (testing "websocket reconnects when disconnected"
-       (init instance-name {:connection-init-payload {:token "abc"}
-                            :ws-url "ws://socket.rocket"
-                            :ws-reconnect-timeout 0})
+       (init instance-name {:ws {:url                     "ws://socket.rocket"
+                                 :connection-init-payload {:token "abc"}
+                                 :reconnect-timeout       0}})
 
        (wait-for
         [::internals/on-ws-open]
-        (is (get-in (db-instance) [:websocket :ready?]))
+        (is (get-in (db-instance) [:ws :ready?]))
 
         ;; create a subscription and wait for it to be sent
         (let [subscription-registration [::re-graph/subscribe :my-sub "{ things { id } }" {:some "variable"} [::on-thing]]
@@ -244,11 +244,11 @@
           (on-close)
           (wait-for
            [::internals/on-ws-close]
-           (is (false? (get-in (db-instance) [:websocket :ready?])))
+           (is (false? (get-in (db-instance) [:ws :ready?])))
 
            (testing "websocket is reconnected"
              (wait-for [::internals/on-ws-open]
-                       (is (get-in (db-instance) [:websocket :ready?]))
+                       (is (get-in (db-instance) [:ws :ready?]))
 
                        (testing "subscriptions are resumed"
                          (wait-for
@@ -270,8 +270,8 @@
         on-ws-message (on-ws-message (or instance-name default-instance-name))]
     (with-redefs [internals/generate-query-id (constantly "random-query-id")]
       (run-test-sync
-       (init instance-name {:connection-init-payload nil
-                            :ws-url "ws://socket.rocket"})
+       (init instance-name {:ws {:url                     "ws://socket.rocket"
+                                 :connection-init-payload nil}})
 
        (let [expected-query-payload {:id "random-query-id"
                                      :type "start"
@@ -323,8 +323,8 @@
   (let [dispatch (partial dispatch-to-instance instance-name)]
     (run-test-sync
      (let [expected-http-url "http://foo.bar/graph-ql"]
-       (init instance-name {:http-url expected-http-url
-                            :ws-url nil})
+       (init instance-name {:http {:url expected-http-url}
+                            :ws   nil})
 
        (let [expected-query-payload {:query "query { things { id } }"
                                      :variables {:some "variable"}}
@@ -381,8 +381,8 @@
      (let [mock-response (atom {})
            query "{ things { id } }"
            variables {:some "variable"}]
-       (init instance-name {:http-url "http://foo.bar/graph-ql"
-                            :ws-url nil})
+       (init instance-name {:http {:url "http://foo.bar/graph-ql"}
+                            :ws   nil})
 
        (re-frame/reg-fx
         ::internals/send-http
@@ -478,7 +478,8 @@
                http-server-response (fn [url & [opts respond raise]]
                                       (respond {:status 400, :body {:errors [{:message "OK"
                                                                               :extensions {:status 404}}]}}))]
-           (init instance-name {:http-url http-url, :ws-url nil})
+           (init instance-name {:http {:url http-url}
+                                :ws   nil})
 
            (re-frame/reg-event-db
              ::on-thing
@@ -507,8 +508,8 @@
   (let [dispatch (partial dispatch-to-instance instance-name)]
     (run-test-sync
      (let [expected-http-url "http://foo.bar/graph-ql"]
-       (init instance-name {:http-url expected-http-url
-                            :ws-url nil})
+       (init instance-name {:http {:url expected-http-url}
+                            :ws   nil})
 
        (let [mutation (str "signin($login:String!,$password:String!){"
                            "signin(login:$login,password:$password){id}}")
@@ -564,9 +565,9 @@
     (run-test-sync
      (let [expected-http-url "http://foo.bar/graph-ql"
            expected-request {:with-credentials? false}]
-       (init instance-name {:http-url expected-http-url
-                            :http-parameters expected-request
-                            :ws-url nil})
+       (init instance-name {:http {:url  expected-http-url
+                                   :impl expected-request}
+                            :ws   nil})
        (testing "Request can be specified"
          (re-frame/reg-fx
           ::internals/send-http
@@ -596,7 +597,8 @@
 
     (testing "using a websocket"
       (run-test-sync
-       (init {:connection-init-payload nil :ws-url "ws://socket.rocket"})
+       (init {:ws {:url                     "ws://socket.rocket"
+                   :connection-init-payload nil}})
        (let [expected-subscription-payload {:id "my-sub"
                                             :type "start"
                                             :payload {:query "subscription { things { id } }"
@@ -652,8 +654,8 @@
                              (reset! callback-called? true)
                              (is (= expected-response-payload payload)))]
 
-           (init {:http-url expected-http-url
-                  :ws-url nil})
+           (init {:http {:url expected-http-url}
+                  :ws   nil})
 
            (re-frame/reg-fx
             ::internals/send-http
@@ -681,8 +683,8 @@
                              (reset! callback-called? true)
                              (is (= expected-response-payload payload)))]
 
-           (init {:http-url expected-http-url
-                  :ws-url nil})
+           (init {:http {:url expected-http-url}
+                  :ws   nil})
 
            (re-frame/reg-fx
             ::internals/send-http
@@ -708,8 +710,8 @@
 (deftest venia-compatibility-test
   (run-test-sync
    (let [expected-http-url "http://foo.bar/graph-ql"]
-     (re-graph/init {:http-url expected-http-url
-                     :ws-url nil})
+     (re-graph/init {:http {:url expected-http-url}
+                     :ws   nil})
 
      (let [expected-query-payload {:query "query { things { id } }"
                                    :variables {:some "variable"}}
@@ -742,11 +744,13 @@
 
    (re-frame/reg-fx
     ::internals/connect-ws
-    (fn [[instance-name & args]]
+    (fn [[instance-name _options]]
       ((on-open instance-name (keyword (str (name instance-name) "-connection"))))))
 
-   (init :service-a {:connection-init-payload nil :ws-url "ws://socket.rocket"})
-   (init :service-b {:connection-init-payload nil :ws-url "ws://socket.rocket"})
+   (init :service-a {:ws {:url                     "ws://socket.rocket"
+                          :connection-init-payload nil}})
+   (init :service-b {:ws {:url "ws://socket.rocket"
+                          :connection-init-payload nil}})
 
    (let [expected-subscription-payload-a {:id "a-sub"
                                           :type "start"
