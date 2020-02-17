@@ -271,12 +271,11 @@
  interceptors
  (fn [{:keys [db instance-name]} _]
    (when-not (get-in db [:ws :ready?])
-     {::connect-ws [instance-name (:ws db)]})))
+     {::connect-ws [instance-name db]})))
 
 (re-frame/reg-fx
   ::connect-ws
-  (fn [[instance-name {:keys [url sub-protocol impl]}]]
-    (println "DEBUG DEBUG DEBUG: " url " " sub-protocol " " impl)
+  (fn [[instance-name {{:keys [url sub-protocol impl]} :ws}]]
     #?(:cljs (let [ws (js/WebSocket. url sub-protocol)]
                (aset ws "onmessage" (on-ws-message instance-name))
                (aset ws "onopen" (on-open instance-name ws))
