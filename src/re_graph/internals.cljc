@@ -283,11 +283,12 @@
               (aset ws "onopen" (on-open instance-name ws))
               (aset ws "onclose" (on-close instance-name))
               (aset ws "onerror" (on-error instance-name)))
-      :clj (let [ws (ws/connect ws-url
-                                :on-receive (on-ws-message instance-name)
-                                :on-close (on-close instance-name)
-                                :on-error (on-error instance-name)
-                                :subprotocols [sub-protocol])]
+      :clj (let [ws (apply ws/connect ws-url
+                           (into [:on-receive (on-ws-message instance-name)
+                                  :on-close (on-close instance-name)
+                                  :on-error (on-error instance-name)]
+                                  (when sub-protocol
+                                    [:subprotocols [sub-protocol]])))]
              ((on-open instance-name ws))))))
 
 (re-frame/reg-fx
