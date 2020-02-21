@@ -276,11 +276,15 @@
 (re-frame/reg-fx
   ::connect-ws
   (fn [[instance-name {{:keys [url sub-protocol impl]} :ws}]]
-    #?(:cljs (let [ws (js/WebSocket. url sub-protocol)]
-               (aset ws "onmessage" (on-ws-message instance-name))
-               (aset ws "onopen" (on-open instance-name ws))
-               (aset ws "onclose" (on-close instance-name))
-               (aset ws "onerror" (on-error instance-name)))
+    #?(:cljs (let [ws (cond
+                       (nil? sub-protocol)
+                       (js/WebSocket. ws-url)
+                       :else ;; non-nil sub protocol
+                       (js/WebSocket. ws-url sub-protocol))]
+              (aset ws "onmessage" (on-ws-message instance-name))
+              (aset ws "onopen" (on-open instance-name ws))
+              (aset ws "onclose" (on-close instance-name))
+              (aset ws "onerror" (on-error instance-name)))
        :clj  (ws/websocket url (merge impl {:on-open      (on-open instance-name)
                                             :on-message   (let [callback (on-ws-message instance-name)]
                                                             (fn [_ws message _last?]

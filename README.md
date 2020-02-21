@@ -54,8 +54,8 @@ Call the `init` function to bootstrap it and then use `subscribe`, `unsubscribe`
 Dispatch the `init` event to bootstrap it and then use the `:subscribe`, `:unsubscribe`, `:query` and `:mutate` events:
 
 ```clojure
-(require [re-graph.core :as re-graph]
-         [re-frame.core :as re-frame])
+(require '[re-graph.core :as re-graph]
+         '[re-frame.core :as re-frame])
 
 ;; initialise re-graph, possibly including configuration options (see below)
 (re-frame/dispatch [::re-graph/init {}])
@@ -112,7 +112,7 @@ re-graph now supports multiple instances, allowing you to connect to multiple Gr
 All function/event signatures now take an optional instance-name as the first argument to let you address them separately:
 
 ```clojure
-(require [re-graph.core :as re-graph])
+(require '[re-graph.core :as re-graph])
 
 ;; initialise re-graph for service A
 (re-graph/init :service-a {:ws-url "wss://a.com/graphql-ws})
