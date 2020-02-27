@@ -278,9 +278,9 @@
   (fn [[instance-name {{:keys [url sub-protocol impl]} :ws}]]
     #?(:cljs (let [ws (cond
                        (nil? sub-protocol)
-                       (js/WebSocket. ws-url)
+                       (js/WebSocket. url)
                        :else ;; non-nil sub protocol
-                       (js/WebSocket. ws-url sub-protocol))]
+                       (js/WebSocket. url sub-protocol))]
               (aset ws "onmessage" (on-ws-message instance-name))
               (aset ws "onopen" (on-open instance-name ws))
               (aset ws "onclose" (on-close instance-name))
