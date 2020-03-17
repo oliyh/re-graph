@@ -16,8 +16,8 @@
 
 #?(:clj
    (deftest http-test
-     (re-graph/init {:ws-url nil
-                     :http-url "http://localhost:8888/graphql"})
+     (re-graph/init {:ws nil
+                     :http {:url "http://localhost:8888/graphql"}})
 
      (testing "async query"
        (let [response (promise)]
