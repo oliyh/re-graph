@@ -13,8 +13,9 @@
                   ["vcs" "push"]]
   :dependencies [[re-frame "0.10.6"]
                  [cljs-http "0.1.45"]
+                 [clj-http "3.9.1"]
+                 [stylefruits/gniazdo "1.1.1"]
                  [cheshire "5.8.1"]
-                 [hato "0.5.0"]
                  [org.clojure/tools.logging "0.4.1"]]
   :profiles {:provided {:dependencies [[org.clojure/clojure "1.9.0"]
                                        [org.clojure/clojurescript "1.10.439"]]}
@@ -24,10 +25,20 @@
                         :dependencies   [[org.clojure/tools.reader "1.2.2"]
                                          [binaryage/devtools "0.9.10"]
                                          [day8.re-frame/test "0.1.5"]
-                                         [com.bhauman/figwheel-main "0.2.1"]
+                                         [com.bhauman/figwheel-main "0.2.1" :exclusions [org.eclipse.jetty.websocket/websocket-server
+                                                                                         org.eclipse.jetty.websocket/websocket-servlet]]
+                                         [clj-http-fake "1.0.3"]
 
-                                         ;; gh-pages deploy
-                                         [leiningen-core "2.8.1"]]
+                                         ;; integration test
+                                         [org.eclipse.jetty.websocket/websocket-client "9.4.18.v20190429"]
+                                         [io.pedestal/pedestal.service "0.5.7"]
+                                         [io.pedestal/pedestal.jetty "0.5.7"]
+                                         [ch.qos.logback/logback-classic "1.2.3" :exclusions [org.slf4j/slf4j-api]]
+                                         [org.slf4j/jul-to-slf4j "1.7.26"]
+                                         [org.slf4j/jcl-over-slf4j "1.7.26"]
+                                         [org.slf4j/log4j-over-slf4j "1.7.26"]
+                                         [com.walmartlabs/lacinia-pedestal "0.13.0-alpha-1"]
+                                         [io.pedestal/pedestal.service-tools "0.5.7"]]
                         :repl-options   {:init-ns user}}}
   :aliases {"fig"       ["trampoline" "run" "-m" "figwheel.main"]
             "fig:build" ["trampoline" "run" "-m" "figwheel.main" "-b" "dev" "-r"]
