@@ -19,10 +19,11 @@
   #?(:cljs (clj->js {:data (js/JSON.stringify (clj->js d))})
      :clj (json/encode d)))
 
-(re-frame/reg-fx
- ::internals/connect-ws
- (fn [[instance-name & args]]
-   ((on-open instance-name ::websocket-connection))))
+(defn- install-websocket-stub []
+  (re-frame/reg-fx
+   ::internals/connect-ws
+   (fn [[instance-name & args]]
+     ((on-open instance-name ::websocket-connection)))))
 
 (defn- prepend-instance-name [instance-name [event-name & args :as event]]
   (if instance-name
@@ -42,6 +43,7 @@
         db-instance #(get-in @app-db [:re-graph (or instance-name default-instance-name)])
         on-ws-message (on-ws-message (or instance-name default-instance-name))]
     (run-test-sync
+     (install-websocket-stub)
      (init instance-name {:connection-init-payload nil
                           :ws-url "ws://socket.rocket"})
 
@@ -208,7 +210,7 @@
         db-instance #(get-in @app-db [:re-graph (or instance-name default-instance-name)])
         on-close (on-close (or instance-name default-instance-name))]
     (run-test-async
-
+     (install-websocket-stub)
      (re-frame/reg-fx
       :dispatch-later
       (fn [[{:keys [dispatch]}]]
@@ -270,6 +272,7 @@
         on-ws-message (on-ws-message (or instance-name default-instance-name))]
     (with-redefs [internals/generate-query-id (constantly "random-query-id")]
       (run-test-sync
+       (install-websocket-stub)
        (init instance-name {:connection-init-payload nil
                             :ws-url "ws://socket.rocket"})
 
@@ -595,6 +598,7 @@
 
     (testing "using a websocket"
       (run-test-sync
+       (install-websocket-stub)
        (init {:connection-init-payload nil :ws-url "ws://socket.rocket"})
        (let [expected-subscription-payload {:id "my-sub"
                                             :type "start"

@@ -11,6 +11,15 @@
 (defn- create-pet [context args parent]
   (assoc args :id 999))
 
+(defn- stream-pets [context args source-stream]
+  (let [{:keys [count]} args
+        runnable ^Runnable (fn []
+                             (dotimes [i count]
+                               (source-stream {:i i})))
+        streamer (Thread. runnable "stream-pets-thread")]
+    (.start streamer)
+    #(.stop streamer)))
+
 (defn compile-schema []
   (schema/compile
    {:objects {:Pet {:fields {:id {:type 'String}
@@ -21,9 +30,17 @@
 
     :mutations {:createPet {:type :Pet
                             :args {:name {:type '(non-null String)}}
-                            :resolve create-pet}}}))
+                            :resolve create-pet}}
 
-(def lacinia-opts {:graphiql true})
+    :subscriptions
+    {:pets
+     {:type '(list :Pet)
+      :stream stream-pets
+      :resolve resolve-pets
+      :args {:count {:type 'Int :default 5}}}}}))
+
+(def lacinia-opts {:graphiql true
+                   :subscriptions true})
 
 (def service (lacinia/service-map (fn [] (compile-schema)) lacinia-opts))
 
