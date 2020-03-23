@@ -1,37 +1,68 @@
 (ns re-graph.integration-test
   (:require [re-graph.core :as re-graph]
+            [re-graph.internals :as internals]
             #?(:clj [clojure.test :refer [deftest testing is use-fixtures]]
                :cljs [cljs.test :refer-macros [deftest testing is use-fixtures]])
             [day8.re-frame.test :refer [run-test-sync run-test-async wait-for]
              :refer-macros [run-test-sync]]
-            #?(:clj [re-graph.integration-server :refer [start! stop!]])))
-
-#?(:clj
-   (defn- with-server [f]
-     (start!)
-     (try (f)
-          (finally (stop!)))))
+            [re-frame.core :as re-frame]
+            [re-frame.db :as rfdb]
+            #?(:clj [re-graph.integration-server :refer [with-server]])))
 
 #?(:clj (use-fixtures :once with-server))
 
-;; todo can we reuse these tests in cljs?
+(defn register-callback! []
+  (re-frame/reg-event-db
+   ::callback
+   (fn [db [_ response]]
+     (assoc db ::response response))))
+
+(deftest async-http-query-test
+  (run-test-async
+   (re-graph/init {:ws-url nil
+                   :http-url "http://localhost:8888/graphql"})
+   (register-callback!)
+
+   (testing "async query"
+     (re-graph/query "{ pets { id name } }" {} #(re-frame/dispatch [::callback %]))
+
+     (wait-for
+      [::callback]
+
+      (is (= {:data
+              {:pets
+               [{:id "123", :name "Billy"}
+                {:id "234", :name "Bob"}
+                {:id "345", :name "Beatrice"}]}}
+             (::response @rfdb/app-db)))
+
+      (testing "instances, query ids, etc"
+        ;; todo
+        )
+
+      (testing "http parameters"
+        ;; todo
+        )))))
+
+(deftest async-http-mutate-test
+  (run-test-async
+    (re-graph/init {:ws-url nil
+                    :http-url "http://localhost:8888/graphql"})
+    (register-callback!)
+
+    (testing "async mutate"
+      (re-graph/mutate "mutation { createPet(name: \"Zorro\") { id name } }" {} #(re-frame/dispatch [::callback %]))
+
+      (wait-for
+       [::callback]
+       (is (= {:data {:createPet {:id "999", :name "Zorro"}}}
+              (::response @rfdb/app-db)))))))
 
 #?(:clj
-   (deftest http-test
+   (deftest sync-http-test
      (run-test-sync
       (re-graph/init {:ws-url nil
                       :http-url "http://localhost:8888/graphql"})
-
-      (testing "async query"
-        (let [response (promise)]
-          (re-graph/query "{ pets { id name } }" {} #(deliver response %))
-
-          (is (= {:data
-                  {:pets
-                   [{:id "123", :name "Billy"}
-                    {:id "234", :name "Bob"}
-                    {:id "345", :name "Beatrice"}]}}
-                 (deref response 1000 ::timeout)))))
 
       (testing "sync query"
         (is (= {:data
@@ -40,13 +71,6 @@
                   {:id "234", :name "Bob"}
                   {:id "345", :name "Beatrice"}]}}
                (re-graph/query-sync "{ pets { id name } }" {}))))
-
-      (testing "async mutate"
-        (let [response (promise)]
-          (re-graph/mutate "mutation { createPet(name: \"Zorro\") { id name } }" {} #(deliver response %))
-
-          (is (= {:data {:createPet {:id "999", :name "Zorro"}}}
-                 (deref response 1000 ::timeout)))))
 
       (testing "sync mutate"
         (is (= {:data {:createPet {:id "999", :name "Zorro"}}}
@@ -59,46 +83,79 @@
                   :extensions {:type "QueryRoot"
                                :field "malformed"
                                :status 400}}]}
-               (re-graph/query-sync "{ malformed }" {}))))
+               (re-graph/query-sync "{ malformed }" {})))))))
 
-      (testing "instances, query ids, etc"
-        ;; todo
-        )
+(deftest websocket-query-test
+   (run-test-async
+    (re-graph/init {:ws-url "ws://localhost:8888/graphql-ws"
+                    :http-url nil})
 
-      (testing "http parameters"
-        ;; todo
-        ))))
+    (re-frame/reg-fx
+     ::internals/disconnect-ws
+     (fn [[ws]]
+       (re-frame/dispatch [::ws-disconnected])))
 
-#?(:clj
-   (deftest websocket-test
-     (run-test-sync
-      (re-graph/init {:ws-url "ws://localhost:8888/graphql-ws"
-                      :http-url nil})
+    (re-frame/reg-event-fx
+     ::ws-disconnected
+     (fn [& _args]
+       ;; do nothing
+       {}))
 
-      (testing "subscriptions"
-        (let [responses (atom [])
-              responded? (promise)]
-          (re-graph/subscribe :all-pets "MyPets($count: Int) { pets(count: $count) { id name } }" {:count 5}
-                              (fn [response]
-                                (when (<= 5 (count (swap! responses conj response)))
-                                  (deliver responded? true))))
+    (re-frame/reg-event-db
+     ::complete
+     (fn [db _]
+       db))
 
-          (is (deref responded? 5000 ::timed-out))
-          (is (every? #(= {:data
-                           {:pets
-                            [{:id "123", :name "Billy"}
-                             {:id "234", :name "Bob"}
-                             {:id "345", :name "Beatrice"}]}}
-                          %)
-                      @responses))
-          (is (= 5 (count @responses)))
+    (re-frame/reg-event-fx
+     ::callback
+     (fn [{:keys [db]} [_ response]]
+       (println "response!" response)
+       (let [new-db (update db ::responses conj response)]
+         (merge
+          {:db new-db}
+          (when (<= 5 (count (::responses new-db)))
+            {:dispatch [::complete]})))))
 
-          (re-graph/unsubscribe :all-pets)))
+    (testing "subscriptions"
+      (re-graph/subscribe :all-pets "MyPets($count: Int) { pets(count: $count) { id name } }" {:count 5}
+                          #(do (println "ooh!" %)
+                               (re-frame/dispatch [::callback %])))
 
-      (testing "mutations"
-        (testing "async mutate"
-          (let [response (promise)]
-            (re-graph/mutate "mutation { createPet(name: \"Zorro\") { id name } }" {} #(deliver response %))
+      (wait-for
+       [::complete]
+       (let [responses (::responses @rfdb/app-db)]
+         (is (every? #(= {:data
+                          {:pets
+                           [{:id "123", :name "Billy"}
+                            {:id "234", :name "Bob"}
+                            {:id "345", :name "Beatrice"}]}}
+                         %)
+                     responses))
+         (is (= 5 (count responses))))))))
 
-            (is (= {:data {:createPet {:id "999", :name "Zorro"}}}
-                   (deref response 1000 ::timeout)))))))))
+(deftest websocket-mutation-test
+   (run-test-async
+    (re-graph/init {:ws-url "ws://localhost:8888/graphql-ws"
+                    :http-url nil
+                    })
+    (register-callback!)
+
+    (re-frame/reg-fx
+     ::internals/disconnect-ws
+     (fn [[ws]]
+       (re-frame/dispatch [::ws-disconnected])))
+
+    (re-frame/reg-event-fx
+     ::ws-disconnected
+     (fn [& _args]
+       ;; do nothing
+       {}))
+
+    (testing "mutations"
+      (testing "async mutate"
+        (re-graph/mutate "mutation { createPet(name: \"Zorro\") { id name } }" {} #(re-frame/dispatch [::callback %]))
+
+        (wait-for
+         [::callback]
+         (is (= {:data {:createPet {:id "999", :name "Zorro"}}}
+                (::response @rfdb/app-db))))))))

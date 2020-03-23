@@ -42,7 +42,10 @@
 (def lacinia-opts {:graphiql true
                    :subscriptions true})
 
-(def service (lacinia/service-map (fn [] (compile-schema)) lacinia-opts))
+(def service
+  (-> (lacinia/service-map (fn [] (compile-schema)) lacinia-opts)
+      (assoc ::server/allowed-origins {:creds true
+                                       :allowed-origins (constantly true)})))
 
 (def runnable-service (server/create-server service))
 
@@ -51,3 +54,8 @@
 
 (defn stop! []
   (server/stop runnable-service))
+
+(defn with-server [f]
+  (start!)
+  (try (f)
+       (finally (stop!))))

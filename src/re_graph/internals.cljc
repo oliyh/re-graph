@@ -16,7 +16,7 @@
 
 (def default-instance-name ::default)
 
-(def destroyed-instance ::destroyed-instance)
+(def destroyed-instance {::destroyed-instance true})
 
 (defn- cons-interceptor [ctx interceptor]
   (update ctx :queue #(into (into empty-queue [interceptor]) %)))
