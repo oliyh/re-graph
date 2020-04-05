@@ -13,9 +13,6 @@
                   ["vcs" "push"]]
   :dependencies [[re-frame "0.10.6"]
                  [cljs-http "0.1.45"]
-                 [clj-http "3.9.1"]
-                 [stylefruits/gniazdo "1.1.3"]
-                 [cheshire "5.8.1"]
                  [org.clojure/tools.logging "0.4.1"]]
   :profiles {:provided {:dependencies [[org.clojure/clojure "1.9.0"]
                                        [org.clojure/clojurescript "1.10.439"]]}

@@ -19,8 +19,8 @@
 
 (deftest async-http-query-test
   (run-test-async
-   (re-graph/init {:ws-url nil
-                   :http-url "http://localhost:8888/graphql"})
+   (re-graph/init {:ws nil
+                   :http {:url "http://localhost:8888/graphql"}})
    (register-callback!)
 
    (testing "async query"
