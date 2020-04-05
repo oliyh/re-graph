@@ -6,17 +6,13 @@
             [re-graph.logging :as log]
             #?@(:cljs [[cljs-http.client :as http]
                        [cljs-http.core :as http-core]]
-                :clj  [[hato.client :as http]])
-            #?(:cljs [clojure.core.async :as a]
-               :clj  [clojure.core.async :refer [go] :as a])
-            #?(:clj [hato.websocket :as ws])
+                :clj  [[re-graph.interop :as interop]])
+            #?(:cljs [clojure.core.async :as a])
             #?(:clj [cheshire.core :as json]))
   #?(:cljs (:require-macros [cljs.core.async.macros :refer [go]]))
   #?(:clj (:import [java.util UUID])))
 
 (def default-instance-name ::default)
-
-(def destroyed-instance {::destroyed-instance true})
 
 (defn- cons-interceptor [ctx interceptor]
   (update ctx :queue #(into (into empty-queue [interceptor]) %)))
@@ -58,7 +54,7 @@
                                       (ensure-query-id event-name))]
 
                (cond
-                 (= instance ::destroyed-instance)
+                 (:destroyed? instance)
                  ctx
 
                  instance
@@ -138,32 +134,29 @@
                                           body
                                           (insert-http-status body status))]))))
 
-      :clj (let [future (http/post http-url
-                                   (-> request
-                                       (update :headers merge {"Content-Type" "application/json"
-                                                               "Accept" "application/json"})
-                                       (merge {:body (encode payload)
-                                               :as :json
-                                               :coerce :always
-                                               :async? true
-                                               :throw-exceptions false}))
-                                   (fn [{:keys [status body]}]
-                                     (re-frame/dispatch [::http-complete
-                                                         instance-name
-                                                         query-id
-                                                         (if (unexceptional-status? status)
-                                                           body
-                                                           (insert-http-status body status))]))
-                                   (fn [exception]
-                                     (let [{:keys [status body]} (ex-data exception)]
-                                       (re-frame/dispatch [::http-complete instance-name query-id (insert-http-status body status)]))))]
+      :clj (let [future (interop/send-http http-url
+                                           request
+                                           (encode payload)
+                                           (fn [{:keys [status body]}]
+                                             (re-frame/dispatch [::http-complete
+                                                                 instance-name
+                                                                 query-id
+                                                                 (if (unexceptional-status? status)
+                                                                   body
+                                                                   (insert-http-status body status))]))
+                                           (fn [exception]
+                                             (let [{:keys [status body]} (ex-data exception)]
+                                               (re-frame/dispatch [::http-complete instance-name query-id (insert-http-status body status)]))))]
              (re-frame/dispatch [::register-abort instance-name query-id #(.cancel future)])))))
+
+
 
 (re-frame/reg-fx
  ::send-ws
  (fn [[websocket payload]]
+   (println "Send ws" websocket payload)
    #?(:cljs (.send websocket (encode payload))
-      :clj (ws/send! websocket (encode payload)))))
+      :clj (interop/send-ws websocket (encode payload)))))
 
 (re-frame/reg-fx
  ::call-callback
@@ -256,6 +249,7 @@
      ((on-open instance-name websocket))))
   ([instance-name websocket]
    (fn []
+     (println "opened ws!" websocket)
      (re-frame/dispatch [::on-ws-open instance-name websocket]))))
 
 (defn- on-close [instance-name]
@@ -285,21 +279,17 @@
               (aset ws "onopen" (on-open instance-name ws))
               (aset ws "onclose" (on-close instance-name))
               (aset ws "onerror" (on-error instance-name)))
-       :clj  (ws/websocket url (merge impl {:on-open      (on-open instance-name)
-                                            :on-message   (let [callback (on-ws-message instance-name)]
-                                                            (fn [_ws message _last?]
-                                                              (callback (str message))))
-                                            :on-close     (on-close instance-name)
-                                            :on-error     (let [callback (on-error instance-name)]
-                                                            (fn [_ws error]
-                                                              (callback error)))
-                                            :subprotocols [sub-protocol]})))))
+       :clj  (interop/create-ws url (merge impl {:on-open      (on-open instance-name)
+                                                 :on-message   (on-ws-message instance-name)
+                                                 :on-close     (on-close instance-name)
+                                                 :on-error     (on-error instance-name)
+                                                 :subprotocols [sub-protocol]})))))
 
 (re-frame/reg-fx
  ::disconnect-ws
  (fn [[ws]]
    #?(:cljs (.close ws)
-      :clj (ws/close! ws))))
+      :clj (interop/close-ws ws))))
 
 (defn default-url
   [protocol path]

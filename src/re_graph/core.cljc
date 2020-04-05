@@ -1,7 +1,7 @@
 (ns re-graph.core
   (:require [re-frame.core :as re-frame]
             [re-graph.internals :as internals
-             :refer [interceptors default-instance-name destroyed-instance]]
+             :refer [interceptors default-instance-name]]
             [re-graph.logging :as log]
             [clojure.string :as string]))
 
@@ -211,7 +211,7 @@
       :dispatch [::destroy instance-name]}
 
      (merge
-      {:db destroyed-instance}
+      {:db (assoc db :destroyed? true)}
       (when-let [ws (get-in db [:ws :connection])]
         {::internals/disconnect-ws [ws]})))))
 

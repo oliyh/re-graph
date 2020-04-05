@@ -21,6 +21,9 @@ Add re-graph to your project's dependencies:
 
 [![Clojars Project](https://img.shields.io/clojars/v/re-graph.svg)](https://clojars.org/re-graph)
 
+You will also pull in `re-graph.hato` by default, which requires JDK11. To use earlier JDKs, exclude `re-graph.hato` and include `re-graph.clj-http-gniazdo`.
+If you are only targeting Javascript you do not need either of these libraries.
+
 ### Vanilla Clojure/Script
 
 Call the `init` function to bootstrap it and then use `subscribe`, `unsubscribe`, `query` and `mutate` functions:
@@ -99,7 +102,7 @@ Options can be passed to the init event, with the following possibilities:
          }
 
      :http {:url    "http://bar.io/graphql"   ;; override the http url (defaults to /graphql)
-           {:impl   {}                        ;; implementation-specific options (see cljs-http or hato for options, defaults to {})
+            :impl   {}                        ;; implementation-specific options (see clj-http or hato for options, defaults to {})
            }
   }])
 ```
@@ -167,8 +170,8 @@ See the [hato documentation](https://github.com/gnarroway/hato) for all the supp
 When initializing re-graph, configure both the HTTP and WebSocket connections with this client:
 
 ```
-(re-graph/init {:http-parameters {:http-client http-client}
-                :ws-parameters   {:http-client http-client}})
+(re-graph/init {:http {:impl {:http-client http-client}}
+                :ws   {:impl {:http-client http-client}}})
 ```
 
 In the call, you can provide any supported re-graph or hato options. Be careful though; hato convenience options for the HTTP client will be ignored when using the `:http-client` option.

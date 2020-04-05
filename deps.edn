@@ -1,6 +1,6 @@
 {:deps  {re-frame                  {:mvn/version "0.10.6"}
          cljs-http                 {:mvn/version "0.1.45"}
          cheshire                  {:mvn/version "5.8.1"}
-         hato                      {:mvn/version "0.5.0"}
+         re-graph.hato             {:mvn/version "0.1.13-SNAPSHOT"}
          org.clojure/tools.logging {:mvn/version "0.4.1"}}
  :paths ["src"]}

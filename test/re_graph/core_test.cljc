@@ -1,14 +1,15 @@
 (ns re-graph.core-test
   (:require [re-graph.core :as re-graph]
-            [re-graph.internals :as internals :refer [default-instance-name destroyed-instance]]
+            [re-graph.internals :as internals :refer [default-instance-name]]
             [re-frame.core :as re-frame]
             [re-frame.db :refer [app-db]]
             [day8.re-frame.test :refer [run-test-sync run-test-async wait-for]
              :refer-macros [run-test-sync run-test-async wait-for]]
             [clojure.test :refer [deftest is testing run-tests]
              :refer-macros [deftest is testing run-tests]]
-            #?(:clj [cheshire.core :as json])
-            #?(:clj [hato.client :as http])))
+            #?@(:clj [[cheshire.core :as json]
+                      [hato.client :as hato]
+                      [clj-http.client :as clj-http]])))
 
 (def on-ws-message @#'internals/on-ws-message)
 (def on-open @#'internals/on-open)
@@ -19,10 +20,11 @@
   #?(:cljs (clj->js {:data (js/JSON.stringify (clj->js d))})
      :clj (json/encode d)))
 
-(re-frame/reg-fx
- ::internals/connect-ws
- (fn [[instance-name _options]]
-   ((on-open instance-name ::websocket-connection))))
+(defn- install-websocket-stub! []
+  (re-frame/reg-fx
+   ::internals/connect-ws
+   (fn [[instance-name _options]]
+     ((on-open instance-name ::websocket-connection)))))
 
 (defn- prepend-instance-name [instance-name [event-name & args :as event]]
   (if instance-name
@@ -42,6 +44,7 @@
         db-instance #(get-in @app-db [:re-graph (or instance-name default-instance-name)])
         on-ws-message (on-ws-message (or instance-name default-instance-name))]
     (run-test-sync
+     (install-websocket-stub!)
      (init instance-name {:ws {:url "ws://socket.rocket"
                                :connection-init-payload nil}})
 
@@ -194,8 +197,8 @@
 
        (dispatch [::re-graph/destroy])
 
-       (testing "the re-graph state is set to destroyed instance"
-         (is (= (db-instance) destroyed-instance)))))))
+       (testing "the re-graph state is set to destroyed"
+         (is (:destroyed? (db-instance))))))))
 
 (deftest websocket-lifecycle-test
   (run-websocket-lifecycle-test nil))
@@ -208,7 +211,8 @@
         db-instance #(get-in @app-db [:re-graph (or instance-name default-instance-name)])
         on-close (on-close (or instance-name default-instance-name))]
     (run-test-async
-     (install-websocket-stub)
+     (install-websocket-stub!)
+
      (re-frame/reg-fx
       :dispatch-later
       (fn [[{:keys [dispatch]}]]
@@ -270,6 +274,8 @@
         on-ws-message (on-ws-message (or instance-name default-instance-name))]
     (with-redefs [internals/generate-query-id (constantly "random-query-id")]
       (run-test-sync
+       (install-websocket-stub!)
+
        (init instance-name {:ws {:url "ws://socket.rocket"
                                  :connection-init-payload nil}})
 
@@ -469,34 +475,32 @@
                   (::thing @app-db)))))))))
 
 #?(:clj
-   (defn- run-clj-http-query-error-test [instance-name]
-     (let [dispatch (partial dispatch-to-instance instance-name)]
-       (run-test-sync
-         (let [query                "{ things { id } }"
-               variables            {:some "variable"}
-               http-url             "http://foo.bar/graph-ql"
-               http-server-response (fn [url & [opts respond raise]]
-                                      (respond {:status 400, :body {:errors [{:message "OK"
-                                                                              :extensions {:status 404}}]}}))]
-           (init instance-name {:http {:url http-url}
-                                :ws   nil})
-
-           (re-frame/reg-event-db
-             ::on-thing
-             (fn [db [_ payload]]
-               (assoc db ::thing payload)))
-
-           (testing "http error returns correct response"
-             (with-redefs [http/post http-server-response]
-               (let [expected-response-payload {:errors [{:message    "OK",
-                                                          :extensions {:status 404}}]}]
-                 (dispatch [::re-graph/query query variables [::on-thing]])
-                 (is (= expected-response-payload
-                        (::thing @app-db)))))))))))
-
-#?(:clj
    (deftest clj-http-query-error-test
-     (run-clj-http-query-error-test nil)))
+     (let [instance-name nil
+           dispatch (partial dispatch-to-instance instance-name)]
+       (run-test-sync
+        (let [query                "{ things { id } }"
+              variables            {:some "variable"}
+              http-url             "http://foo.bar/graph-ql"
+              http-server-response (fn [url & [opts respond raise]]
+                                     (respond {:status 400, :body {:errors [{:message "OK"
+                                                                             :extensions {:status 404}}]}}))]
+          (init instance-name {:http {:url http-url}
+                               :ws   nil})
+
+          (re-frame/reg-event-db
+           ::on-thing
+           (fn [db [_ payload]]
+             (assoc db ::thing payload)))
+
+          (testing "http error returns correct response"
+            (with-redefs [hato/post http-server-response
+                          clj-http/post http-server-response]
+              (let [expected-response-payload {:errors [{:message    "OK",
+                                                         :extensions {:status 404}}]}]
+                (dispatch [::re-graph/query query variables [::on-thing]])
+                (is (= expected-response-payload
+                       (::thing @app-db)))))))))))
 
 (deftest http-query-error-test
   (run-http-query-error-test nil))
@@ -597,6 +601,8 @@
 
     (testing "using a websocket"
       (run-test-sync
+       (install-websocket-stub!)
+
        (init {:ws {:url "ws://socket.rocket"
                    :connection-init-payload nil}})
        (let [expected-subscription-payload {:id "my-sub"
