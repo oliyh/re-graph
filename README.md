@@ -21,6 +21,9 @@ Add re-graph to your project's dependencies:
 
 [![Clojars Project](https://img.shields.io/clojars/v/re-graph.svg)](https://clojars.org/re-graph)
 
+You will also pull in `re-graph.hato` by default, which requires JDK11. To use earlier JDKs, exclude `re-graph.hato` and include `re-graph.clj-http-gniazdo`.
+If you are only targeting Javascript you do not need either of these libraries.
+
 ### Vanilla Clojure/Script
 
 Call the `init` function to bootstrap it and then use `subscribe`, `unsubscribe`, `query` and `mutate` functions:
@@ -90,17 +93,21 @@ Options can be passed to the init event, with the following possibilities:
 ```clojure
 (re-frame/dispatch
   [::re-graph/init
-    {:ws-url                  "wss://foo.io/graphql-ws" ;; override the websocket url (defaults to /graphql-ws, nil to disable)
-     :ws-sub-protocol         "graphql-ws"              ;; override the websocket sub-protocol
-     :ws-reconnect-timeout    2000                      ;; attempt reconnect n milliseconds after disconnect (default 5000, nil to disable)
-     :resume-subscriptions?   true                      ;; start existing subscriptions again when websocket is reconnected after a disconnect
-     :connection-init-payload {}                        ;; the payload to send in the connection_init message, sent when a websocket connection is made
+    {:ws {:url                     "wss://foo.io/graphql-ws" ;; override the websocket url (defaults to /graphql-ws, nil to disable)
+          :sub-protocol            "graphql-ws"              ;; override the websocket sub-protocol (defaults to "graphql-ws")
+          :reconnect-timeout       5000                      ;; attempt reconnect n milliseconds after disconnect (defaults to 5000, nil to disable)
+          :resume-subscriptions?   true                      ;; start existing subscriptions again when websocket is reconnected after a disconnect (defaults to true)
+          :connection-init-payload {}                        ;; the payload to send in the connection_init message, sent when a websocket connection is made (defaults to {})
+          :impl                    {}                        ;; implementation-specific options (see hato for options, defaults to {})
+         }
 
-     :http-url                "http://bar.io/graphql"   ;; override the http url (defaults to /graphql)
-     :http-parameters         {:with-credentials? false ;; any parameters to be merged with the request, see cljs-http for options
-                               :oauth-token "Secret"}
+     :http {:url    "http://bar.io/graphql"   ;; override the http url (defaults to /graphql)
+            :impl   {}                        ;; implementation-specific options (see clj-http or hato for options, defaults to {})
+           }
   }])
 ```
+
+Either `:ws` or `:http` can be set to nil to disable the WebSocket or HTTP protocols.
 
 ### Multiple instances
 
@@ -140,6 +147,34 @@ All function/event signatures now take an optional instance-name as the first ar
 (re-graph/unsubscribe :service-a :my-subscription-id)
 (re-graph/unsubscribe :service-b :my-subscription-id)
 ```
+
+## Cookie Management
+
+When using re-graph within a browser, cookies are shared between HTTP and WebSocket connection automatically. There's nothing special that needs to be done.
+
+When using re-graph with Clojure, however, some configuration is necessary to ensure that the same cookie store is used for both HTTP and WebSocket connections.
+
+Before initializing re-graph, create a common HTTP client.
+
+```
+(ns user
+  (:require
+    [hato.client :as hc]
+    [re-graph.core :as re-graph]))
+
+(def http-client (hc/build-http-client {:cookie-policy :all}))
+```
+
+See the [hato documentation](https://github.com/gnarroway/hato) for all the supported configuration options.
+
+When initializing re-graph, configure both the HTTP and WebSocket connections with this client:
+
+```
+(re-graph/init {:http {:impl {:http-client http-client}}
+                :ws   {:impl {:http-client http-client}}})
+```
+
+In the call, you can provide any supported re-graph or hato options. Be careful though; hato convenience options for the HTTP client will be ignored when using the `:http-client` option.
 
 ## Development
 
