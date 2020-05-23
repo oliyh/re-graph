@@ -6,6 +6,8 @@ jobs:
     steps:
       - checkout
 
+      - run: cd hato && lein install
+
       # Download and cache dependencies
       - restore_cache:
           keys:
