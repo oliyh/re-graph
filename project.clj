@@ -3,7 +3,7 @@
   :url "https://github.com/oliyh/re-graph"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
-  :plugins [[lein-modules "0.3.11"]]
+  :plugins [[fundingcircle/lein-modules "0.3.15"]]
   :release-tasks [["vcs" "assert-committed"]
                   ["change" "version" "leiningen.release/bump-version" "release"]
                   ["modules" "change" "version" "leiningen.release/bump-version" "release"]
