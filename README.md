@@ -21,8 +21,26 @@ Add re-graph to your project's dependencies:
 
 [![Clojars Project](https://img.shields.io/clojars/v/re-graph.svg)](https://clojars.org/re-graph)
 
-You will also pull in `re-graph.hato` by default, which requires JDK11. To use earlier JDKs, exclude `re-graph.hato` and include `re-graph.clj-http-gniazdo`.
+This will also pull in `re-graph.hato`, a library for using re-graph on the JVM based on
+[hato](https://github.com/gnarroway/hato) which requires JDK11.
+To use earlier JDKs, exclude `re-graph.hato` and include `re-graph.clj-http-gniazdo`.
+
 If you are only targeting Javascript you do not need either of these libraries.
+
+[![Clojars Project](https://img.shields.io/clojars/v/re-graph.hato.svg)](https://clojars.org/re-graph.hato)
+[![Clojars Project](https://img.shields.io/clojars/v/re-graph.clj-http-gniazdo.svg)](https://clojars.org/re-graph.clj-http-gniazdo)
+
+```clj
+;; For JDK 11+
+[re-graph "x.y.z" :exclusions [re-graph.hato]]
+
+;; For JDK 10-
+[re-graph "x.y.z" :exclusions [re-graph.hato]]
+[re-graph.clj-http-gniazdo "x.y.z"]
+
+;; For Javascript only
+[re-graph "x.y.z" :exclusions [re-graph.hato]]
+```
 
 ### Vanilla Clojure/Script
 
