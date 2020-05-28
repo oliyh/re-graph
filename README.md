@@ -32,7 +32,7 @@ If you are only targeting Javascript you do not need either of these libraries.
 
 ```clj
 ;; For JDK 11+
-[re-graph "x.y.z" :exclusions [re-graph.hato]]
+[re-graph "x.y.z"]
 
 ;; For JDK 10-
 [re-graph "x.y.z" :exclusions [re-graph.hato]]
