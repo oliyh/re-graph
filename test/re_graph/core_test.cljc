@@ -570,7 +570,7 @@
      (let [expected-http-url "http://foo.bar/graph-ql"
            expected-request {:with-credentials? false}]
        (init instance-name {:http {:url  expected-http-url
-                                   :impl expected-request}
+                                   :impl (constantly expected-request)}
                             :ws   nil})
        (testing "Request can be specified"
          (re-frame/reg-fx
@@ -597,115 +597,115 @@
         query (if instance-name (partial re-graph/query instance-name) re-graph/query)
         mutate (if instance-name (partial re-graph/mutate instance-name) re-graph/mutate)]
 
-    (testing "can call normal functions instead of needing re-frame")
+    (testing "can call normal functions instead of needing re-frame"
 
-    (testing "using a websocket"
-      (run-test-sync
-       (install-websocket-stub!)
+      (testing "using a websocket"
+        (run-test-sync
+         (install-websocket-stub!)
 
-       (init {:ws {:url "ws://socket.rocket"
-                   :connection-init-payload nil}})
-       (let [expected-subscription-payload {:id "my-sub"
-                                            :type "start"
-                                            :payload {:query "subscription { things { id } }"
-                                                      :variables {:some "variable"}}}
-             expected-unsubscription-payload {:id "my-sub"
-                                              :type "stop"}
-             expected-response-payload {:data {:things [{:id 1} {:id 2}]}}
-             callback-called? (atom false)
-             callback-fn (fn [payload]
-                           (reset! callback-called? true)
-                           (is (= expected-response-payload payload)))]
+         (init {:ws {:url "ws://socket.rocket"
+                     :connection-init-payload nil}})
+         (let [expected-subscription-payload {:id "my-sub"
+                                              :type "start"
+                                              :payload {:query "subscription { things { id } }"
+                                                        :variables {:some "variable"}}}
+               expected-unsubscription-payload {:id "my-sub"
+                                                :type "stop"}
+               expected-response-payload {:data {:things [{:id 1} {:id 2}]}}
+               callback-called? (atom false)
+               callback-fn (fn [payload]
+                             (reset! callback-called? true)
+                             (is (= expected-response-payload payload)))]
 
-         (re-frame/reg-fx
-          ::internals/send-ws
-          (fn [[ws payload]]
-            (is (= ::websocket-connection ws))
-            (is (= expected-subscription-payload
-                   payload))))
-
-         (subscribe :my-sub "{ things { id } }" {:some "variable"} callback-fn)
-
-         (is (= [::internals/callback callback-fn]
-                (get-in (db-instance) [:subscriptions "my-sub" :callback])))
-
-         (testing "messages from the WS are sent to the callback-fn"
-           (on-ws-message (data->message {:type "data"
-                                          :id "my-sub"
-                                          :payload expected-response-payload}))
-
-           (is @callback-called?))
-
-         (testing "and unregistered"
            (re-frame/reg-fx
             ::internals/send-ws
             (fn [[ws payload]]
               (is (= ::websocket-connection ws))
-              (is (= expected-unsubscription-payload
+              (is (= expected-subscription-payload
                      payload))))
 
-           (unsubscribe :my-sub)
+           (subscribe :my-sub "{ things { id } }" {:some "variable"} callback-fn)
 
-           (is (nil? (get-in (db-instance) [:subscriptions "my-sub"])))))))
+           (is (= [::internals/callback callback-fn]
+                  (get-in (db-instance) [:subscriptions "my-sub" :callback])))
 
-    (testing "using http"
-      (testing "queries"
-        (run-test-sync
-         (let [expected-http-url "http://foo.bar/graph-ql"
-               expected-query-payload {:query "query { things { id } }"
-                                       :variables {:some "variable"}}
-               expected-response-payload {:data {:things [{:id 1} {:id 2}]}}
-               callback-called? (atom false)
-               callback-fn (fn [payload]
-                             (reset! callback-called? true)
-                             (is (= expected-response-payload payload)))]
+           (testing "messages from the WS are sent to the callback-fn"
+             (on-ws-message (data->message {:type "data"
+                                            :id "my-sub"
+                                            :payload expected-response-payload}))
 
-           (init {:http {:url expected-http-url}
-                  :ws   nil})
+             (is @callback-called?))
 
-           (re-frame/reg-fx
-            ::internals/send-http
-            (fn [[_ _ http-url {:keys [payload]} :as fx-args]]
-              (is (= expected-query-payload
-                     payload))
+           (testing "and unregistered"
+             (re-frame/reg-fx
+              ::internals/send-ws
+              (fn [[ws payload]]
+                (is (= ::websocket-connection ws))
+                (is (= expected-unsubscription-payload
+                       payload))))
 
-              (is (= expected-http-url http-url))
+             (unsubscribe :my-sub)
 
-              (dispatch-response fx-args expected-response-payload)))
+             (is (nil? (get-in (db-instance) [:subscriptions "my-sub"])))))))
 
-           (query "{ things { id } }" {:some "variable"} callback-fn)
+      (testing "using http"
+        (testing "queries"
+          (run-test-sync
+           (let [expected-http-url "http://foo.bar/graph-ql"
+                 expected-query-payload {:query "query { things { id } }"
+                                         :variables {:some "variable"}}
+                 expected-response-payload {:data {:things [{:id 1} {:id 2}]}}
+                 callback-called? (atom false)
+                 callback-fn (fn [payload]
+                               (reset! callback-called? true)
+                               (is (= expected-response-payload payload)))]
 
-           (testing "responses are sent to the callback"
-             (is @callback-called?)))))
+             (init {:http {:url expected-http-url}
+                    :ws   nil})
 
-      (testing "mutations"
-        (run-test-sync
-         (let [expected-http-url "http://foo.bar/graph-ql"
-               expected-query-payload {:query "mutation { things { id } }"
-                                       :variables {:some "variable"}}
-               expected-response-payload {:data {:things [{:id 1} {:id 2}]}}
-               callback-called? (atom false)
-               callback-fn (fn [payload]
-                             (reset! callback-called? true)
-                             (is (= expected-response-payload payload)))]
+             (re-frame/reg-fx
+              ::internals/send-http
+              (fn [[_ _ http-url {:keys [payload]} :as fx-args]]
+                (is (= expected-query-payload
+                       payload))
 
-           (init {:http {:url expected-http-url}
-                  :ws   nil})
+                (is (= expected-http-url http-url))
 
-           (re-frame/reg-fx
-            ::internals/send-http
-            (fn [[_ _ http-url {:keys [payload]} :as fx-args]]
-              (is (= expected-query-payload
-                     payload))
+                (dispatch-response fx-args expected-response-payload)))
 
-              (is (= expected-http-url http-url))
+             (query "{ things { id } }" {:some "variable"} callback-fn)
 
-              (dispatch-response fx-args expected-response-payload)))
+             (testing "responses are sent to the callback"
+               (is @callback-called?)))))
 
-           (mutate "{ things { id } }" {:some "variable"} callback-fn)
+        (testing "mutations"
+          (run-test-sync
+           (let [expected-http-url "http://foo.bar/graph-ql"
+                 expected-query-payload {:query "mutation { things { id } }"
+                                         :variables {:some "variable"}}
+                 expected-response-payload {:data {:things [{:id 1} {:id 2}]}}
+                 callback-called? (atom false)
+                 callback-fn (fn [payload]
+                               (reset! callback-called? true)
+                               (is (= expected-response-payload payload)))]
 
-           (testing "responses are sent to the callback"
-             (is @callback-called?))))))))
+             (init {:http {:url expected-http-url}
+                    :ws   nil})
+
+             (re-frame/reg-fx
+              ::internals/send-http
+              (fn [[_ _ http-url {:keys [payload]} :as fx-args]]
+                (is (= expected-query-payload
+                       payload))
+
+                (is (= expected-http-url http-url))
+
+                (dispatch-response fx-args expected-response-payload)))
+
+             (mutate "{ things { id } }" {:some "variable"} callback-fn)
+
+             (testing "responses are sent to the callback"
+               (is @callback-called?)))))))))
 
 (deftest non-re-frame-test
   (run-non-re-frame-test nil))
