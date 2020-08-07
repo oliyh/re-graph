@@ -1,6 +1,6 @@
 (ns re-graph.internals
   (:require [re-frame.core :as re-frame]
-            [re-frame.interceptor :refer [->interceptor get-coeffect assoc-coeffect update-coeffect enqueue]]
+            [re-frame.interceptor :refer [->interceptor get-coeffect assoc-coeffect update-coeffect get-effect assoc-effect enqueue]]
             [re-frame.std-interceptors :as rfi]
             [re-frame.interop :refer [empty-queue]]
             [re-graph.logging :as log]
@@ -38,6 +38,33 @@
       trimmed-event)
     trimmed-event))
 
+(defn- build-impl [impl]
+  (if (fn? impl)
+    (impl)
+    impl))
+
+(def instantiate-impl
+  (->interceptor
+   :id ::instantiate-impl
+   :before (fn [ctx]
+             (let [db (get-coeffect ctx :db)
+                   http-impl (get-in db [:http :impl])
+                   ws-impl (get-in db [:ws :impl])]
+               (-> (assoc ctx
+                          ::http-impl http-impl
+                          ::ws-impl ws-impl)
+                   (update-coeffect :db (fn [db]
+                                          (cond-> db
+                                            http-impl (update-in [:http :impl] build-impl)
+                                            ws-impl (update-in [:ws :impl] build-impl)))))))
+   :after (fn [ctx]
+            (let [{::keys [http-impl ws-impl]} ctx
+                  db-effect (get-effect ctx :db)]
+              (cond-> (dissoc ctx ::http-impl ::ws-impl)
+                db-effect (assoc-effect :db (cond-> db-effect
+                                              http-impl (assoc-in [:http :impl] http-impl)
+                                              ws-impl (assoc-in [:ws :impl] ws-impl))))))))
+
 (def re-graph-instance
   (->interceptor
    :id ::instance
@@ -59,7 +86,6 @@
 
                  instance
                  (-> ctx
-                     (assoc-coeffect :instance instance)
                      (assoc-coeffect :instance-name instance-name)
                      (assoc-coeffect :dispatchable-event (into [event-name instance-name] trimmed-event))
                      (cons-interceptor (rfi/path :re-graph instance-name))
@@ -72,7 +98,7 @@
                      ctx))))))
 
 (def interceptors
-  [re-frame/trim-v re-graph-instance])
+  [re-frame/trim-v re-graph-instance instantiate-impl])
 
 (defn- valid-graphql-errors?
   "Validates that response has a valid GraphQL errors map"
@@ -279,11 +305,12 @@
               (aset ws "onopen" (on-open instance-name ws))
               (aset ws "onclose" (on-close instance-name))
               (aset ws "onerror" (on-error instance-name)))
-       :clj  (interop/create-ws url (merge impl {:on-open      (on-open instance-name)
-                                                 :on-message   (on-ws-message instance-name)
-                                                 :on-close     (on-close instance-name)
-                                                 :on-error     (on-error instance-name)
-                                                 :subprotocols [sub-protocol]})))))
+       :clj  (interop/create-ws url (merge (build-impl impl)
+                                           {:on-open      (on-open instance-name)
+                                            :on-message   (on-ws-message instance-name)
+                                            :on-close     (on-close instance-name)
+                                            :on-error     (on-error instance-name)
+                                            :subprotocols [sub-protocol]})))))
 
 (re-frame/reg-fx
  ::disconnect-ws
