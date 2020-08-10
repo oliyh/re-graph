@@ -14,6 +14,7 @@ Features include:
 * Queues websocket messages until ready
 * Websocket reconnects on disconnect
 * Simultaneous connection to multiple GraphQL services
+* Handles reauthentication without disruption
 
 ## Usage
 
@@ -120,7 +121,7 @@ Options can be passed to the init event, with the following possibilities:
          }
 
      :http {:url    "http://bar.io/graphql"   ;; override the http url (defaults to /graphql)
-            :impl   {}                        ;; implementation-specific options (see clj-http or hato for options, defaults to {})
+            :impl   {}                        ;; implementation-specific options (see clj-http or hato for options, defaults to {}, may be a literal or a function that returns the options)
            }
   }])
 ```
@@ -193,6 +194,25 @@ When initializing re-graph, configure both the HTTP and WebSocket connections wi
 ```
 
 In the call, you can provide any supported re-graph or hato options. Be careful though; hato convenience options for the HTTP client will be ignored when using the `:http-client` option.
+
+## Re-initialisation
+
+When initialising re-graph you may have included authorisation tokens e.g.
+
+```
+(re-frame/dispatch [::re-graph/init {:http {:url "http://foo.bar/graph-ql"
+                                            :impl {:headers {"Authorization" 123}}}
+                                     :ws {:connection-init-payload {"Authorization" 123}}}])
+```
+
+If those tokens expire you can refresh them using `re-init` as follows which allows you to change any parameter provided to re-graph:
+
+```
+(re-frame/dispatch [::re-graph/re-init {:http {:impl {:headers {"Authorization" 456}}}
+                                        :ws {:connection-init-payload {"Authorization" 456}}}])
+```
+
+The `connection-init-payload` will be sent again and all future remote calls will contain the updated parameters.
 
 ## Development
 

@@ -846,3 +846,59 @@
 
            (is (nil? (get-in @app-db [:re-graph :service-a :subscriptions "a-sub"])))
            (is (nil? (get-in @app-db [:re-graph :service-b :subscriptions "b-sub"]))))))))
+
+
+(deftest reinit-ws-test []
+  (run-test-sync
+   (install-websocket-stub!)
+
+   (testing "websocket connection payload is sent"
+     (let [last-ws-message (atom nil)]
+
+       (re-frame/reg-fx
+        ::internals/send-ws
+        (fn [[ws payload]]
+          (is (= ::websocket-connection ws))
+          (reset! last-ws-message payload)))
+
+       (re-frame/dispatch [::re-graph/init {:ws {:url "ws://socket.rocket"
+                                                 :connection-init-payload {:auth-token 123}}}])
+
+       (is (= {:type "connection_init"
+               :payload {:auth-token 123}}
+              @last-ws-message))
+
+       (testing "updated when re-inited"
+         (re-frame/dispatch [::re-graph/re-init {:ws {:connection-init-payload {:auth-token 234}}}] )
+
+         (is (= {:type "connection_init"
+                 :payload {:auth-token 234}}
+                @last-ws-message)))))))
+
+(deftest re-init-http-test []
+  (run-test-sync
+
+   (testing "http headers are sent"
+
+     (let [last-http-message (atom nil)]
+       (re-frame/reg-fx
+        ::internals/send-http
+        (fn [[_ _ http-url {:keys [request]} :as fx-args]]
+          (reset! last-http-message request)
+          (dispatch-response fx-args {})))
+
+       (re-frame/dispatch [::re-graph/init {:http {:url "http://foo.bar/graph-ql"
+                                                   :impl {:headers {"Authorization" 123}}}
+                                            :ws nil}])
+
+       (re-frame/dispatch [::re-graph/query "{ things { id } }" {:some "variable"} [::on-thing]])
+
+       (is (= {:headers {"Authorization" 123}}
+              @last-http-message))
+
+       (testing "and can be updated"
+         (re-frame/dispatch [::re-graph/re-init {:http {:impl {:headers {"Authorization" 234}}}}])
+         (re-frame/dispatch [::re-graph/query "{ things { id } }" {:some "variable"} [::on-thing]])
+
+         (is (= {:headers {"Authorization" 234}}
+                @last-http-message)))))))
