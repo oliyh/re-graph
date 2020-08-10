@@ -38,6 +38,14 @@
       trimmed-event)
     trimmed-event))
 
+(defn deep-merge [a b]
+  (merge-with
+   (fn [a b]
+     (if (every? map? [a b])
+       (deep-merge a b)
+       b))
+   a b))
+
 (defn- build-impl [impl]
   (if (fn? impl)
     (impl)
@@ -175,12 +183,10 @@
                                                (re-frame/dispatch [::http-complete instance-name query-id (insert-http-status body status)]))))]
              (re-frame/dispatch [::register-abort instance-name query-id #(.cancel future)])))))
 
-
-
 (re-frame/reg-fx
  ::send-ws
  (fn [[websocket payload]]
-   (println "Send ws" websocket payload)
+   (log/debug "Send ws" websocket payload)
    #?(:cljs (.send websocket (encode payload))
       :clj (interop/send-ws websocket (encode payload)))))
 
@@ -275,7 +281,7 @@
      ((on-open instance-name websocket))))
   ([instance-name websocket]
    (fn []
-     (println "opened ws!" websocket)
+     (log/info "opened ws" websocket)
      (re-frame/dispatch [::on-ws-open instance-name websocket]))))
 
 (defn- on-close [instance-name]

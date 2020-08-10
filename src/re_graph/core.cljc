@@ -178,6 +178,20 @@
    (re-frame/dispatch [::unsubscribe instance-name subscription-id])))
 
 (re-frame/reg-event-fx
+ ::re-init
+ [re-frame/trim-v internals/re-graph-instance]
+ (fn [{:keys [db instance-name]} [opts]]
+   (let [new-db (internals/deep-merge db opts)]
+     (merge {:db new-db}
+            (when (get-in new-db [:ws :ready?])
+              {:dispatch [::internals/connection-init instance-name]})))))
+
+(defn re-init
+  ([opts] (re-init default-instance-name opts))
+  ([instance-name opts]
+   (re-frame/dispatch [::re-init instance-name opts])))
+
+(re-frame/reg-event-fx
  ::init
  (fn [{:keys [db]} [_ instance-name opts]]
    (let [[instance-name opts] (cond
