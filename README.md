@@ -199,17 +199,17 @@ In the call, you can provide any supported re-graph or hato options. Be careful 
 
 When initialising re-graph you may have included authorisation tokens e.g.
 
-```
+```clojure
 (re-frame/dispatch [::re-graph/init {:http {:url "http://foo.bar/graph-ql"
                                             :impl {:headers {"Authorization" 123}}}
-                                     :ws {:connection-init-payload {"Authorization" 123}}}])
+                                     :ws {:connection-init-payload {:token 123}}}])
 ```
 
 If those tokens expire you can refresh them using `re-init` as follows which allows you to change any parameter provided to re-graph:
 
-```
+```clojure
 (re-frame/dispatch [::re-graph/re-init {:http {:impl {:headers {"Authorization" 456}}}
-                                        :ws {:connection-init-payload {"Authorization" 456}}}])
+                                        :ws {:connection-init-payload {:token 456}}}])
 ```
 
 The `connection-init-payload` will be sent again and all future remote calls will contain the updated parameters.
