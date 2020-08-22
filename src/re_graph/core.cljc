@@ -9,13 +9,14 @@
  ::mutate
  interceptors
  (fn [{:keys [db dispatchable-event instance-name]} [query-id query variables callback-event :as event]]
-   (let [query (str "mutation " (string/replace query #"^mutation\s?" ""))]
+   (let [query (str "mutation " (string/replace query #"^mutation\s?" ""))
+         websocket-supported? (contains? (get-in db [:ws :supported-operations]) :mutate)]
      (cond
        (or (get-in db [:http :requests query-id])
            (get-in db [:subscriptions query-id]))
        {} ;; duplicate in-flight mutation
 
-       (get-in db [:ws :ready?])
+       (and websocket-supported? (get-in db [:ws :ready?]))
        {:db (assoc-in db [:subscriptions query-id] {:callback callback-event})
         ::internals/send-ws [(get-in db [:ws :connection])
                              {:id query-id
@@ -23,7 +24,7 @@
                               :payload {:query query
                                         :variables variables}}]}
 
-       (:ws db)
+       (and websocket-supported? (:ws db))
        {:db (update-in db [:ws :queue] conj dispatchable-event)}
 
        :else
@@ -62,13 +63,14 @@
  ::query
  interceptors
  (fn [{:keys [db dispatchable-event instance-name]} [query-id query variables callback-event :as event]]
-   (let [query (str "query " (string/replace query #"^query\s?" ""))]
+   (let [query (str "query " (string/replace query #"^query\s?" ""))
+         websocket-supported? (contains? (get-in db [:ws :supported-operations]) :query)]
      (cond
        (or (get-in db [:http :requests query-id])
            (get-in db [:subscriptions query-id]))
        {} ;; duplicate in-flight query
 
-       (get-in db [:ws :ready?])
+       (and websocket-supported? (get-in db [:ws :ready?]))
        {:db (assoc-in db [:subscriptions query-id] {:callback callback-event})
         ::internals/send-ws [(get-in db [:ws :connection])
                              {:id query-id
@@ -76,7 +78,7 @@
                               :payload {:query query
                                         :variables variables}}]}
 
-       (:ws db)
+       (and websocket-supported? (:ws db))
        {:db (update-in db [:ws :queue] conj dispatchable-event)}
 
        :else

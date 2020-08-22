@@ -340,7 +340,8 @@
    :reconnect-timeout 5000
    :resume-subscriptions? true
    :connection-init-payload {}
-   :impl {}})
+   :impl {}
+   :supported-operations #{:subscribe :mutate :query}})
 
 (def ws-initial-state
   {:ready? false
@@ -356,6 +357,7 @@
 
 (def http-default-options
   {:url (default-url "http" "graphql")
+   :supported-operations #{:mutate :query}
    :impl {}})
 
 (def http-initial-state

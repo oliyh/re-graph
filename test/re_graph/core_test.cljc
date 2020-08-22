@@ -322,6 +322,26 @@
 (deftest named-websocket-query-test
   (run-websocket-query-test :service-a))
 
+(deftest prefer-http-query-test
+  (run-test-sync
+   (install-websocket-stub!)
+
+   (re-frame/dispatch [::re-graph/init {:ws {:url "ws://socket.rocket"
+                                             :connection-init-payload nil
+                                             :supported-operations #{:subscribe}}
+                                        :http {:url "http://foo.bar/graph-ql"}}])
+
+   (testing "Queries are sent via http because the websocket doesn't support them"
+     (let [http-called? (atom false)]
+       (re-frame/reg-fx
+        ::internals/send-http
+        (fn [_]
+          (reset! http-called? true)))
+
+       (re-frame/dispatch [::re-graph/query "{ things { id } }" {:some "variable"} [::on-thing]])
+
+       (is @http-called?)))))
+
 (defn- dispatch-response [[instance-name query-id] payload]
   (re-frame/dispatch [::internals/http-complete instance-name query-id payload]))
 

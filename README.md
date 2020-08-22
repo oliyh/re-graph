@@ -117,11 +117,16 @@ Options can be passed to the init event, with the following possibilities:
           :reconnect-timeout       5000                      ;; attempt reconnect n milliseconds after disconnect (defaults to 5000, nil to disable)
           :resume-subscriptions?   true                      ;; start existing subscriptions again when websocket is reconnected after a disconnect (defaults to true)
           :connection-init-payload {}                        ;; the payload to send in the connection_init message, sent when a websocket connection is made (defaults to {})
-          :impl                    {}                        ;; implementation-specific options (see hato for options, defaults to {})
+          :impl                    {}                        ;; implementation-specific options (see hato for options, defaults to {}, may be a literal or a function that returns the options)
+          :supported-operations    #{:subscribe              ;; declare the operations supported via websocket, defaults to all three
+                                     :query                  ;;   if queries/mutations must be done via http set this to #{:subscribe} only
+                                     :mutate}
          }
 
      :http {:url    "http://bar.io/graphql"   ;; override the http url (defaults to /graphql)
             :impl   {}                        ;; implementation-specific options (see clj-http or hato for options, defaults to {}, may be a literal or a function that returns the options)
+            :supported-operations #{:query    ;; declare the operations supported via http, defaults to :query and :mutate
+                                    :mutate}
            }
   }])
 ```
