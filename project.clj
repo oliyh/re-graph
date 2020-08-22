@@ -59,4 +59,4 @@
             "test-cljs" ["run" "-m" "re-graph.test-runner"]
             "test" ["do" ["clean"] ["test"] ["with-profile" "+clj-http-gniazdo" "test"] ["test-cljs"]]
             "install" ["do" ["modules" "install"] ["install"]]
-            "deploy" ["do" ["deploy" "clojars"] ["modules" "deploy" "clojars"]]})
+            "deploy" ["do" ["install"] ["deploy" "clojars"] ["modules" "deploy" "clojars"]]})
