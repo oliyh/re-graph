@@ -70,6 +70,9 @@ Call the `init` function to bootstrap it and then use `subscribe`, `unsubscribe`
 (re-graph/query "{ things { id } }"  ;; your graphql query
                  {:some "variable"}  ;; arguments map
                  on-thing)           ;; callback event when response is recieved
+
+;; shut re-graph down when finished
+(re-graph/destroy)
 ```
 
 ### re-frame users
@@ -103,6 +106,9 @@ Dispatch the `init` event to bootstrap it and then use the `:subscribe`, `:unsub
                     "{ things { id } }"  ;; your graphql query
                     {:some "variable"}   ;; arguments map
                     [::on-thing]])       ;; callback event when response is recieved
+
+;; shut re-graph down when finished
+(re-frame/dispatch [::re-graph/destroy])
 ```
 
 ### Options
