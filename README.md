@@ -230,6 +230,7 @@ The `connection-init-payload` will be sent again and all future remote calls wil
 `cider-jack-in-clj&cljs`
 
 CLJS tests are available at http://localhost:9500/figwheel-extra-main/auto-testing
+You will need to run `(re-graph.integration-server/start!)` for the integration tests to pass.
 
 [![CircleCI](https://circleci.com/gh/oliyh/re-graph.svg?style=svg)](https://circleci.com/gh/oliyh/re-graph)
 

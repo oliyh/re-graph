@@ -16,7 +16,7 @@
                   ["modules" "change" "version" "leiningen.release/bump-version"]
                   ["vcs" "commit"]
                   ["vcs" "push"]]
-  :dependencies [[re-frame "0.10.6"]
+  :dependencies [[re-frame "1.1.2"]
                  [cljs-http "0.1.45"]
                  [org.clojure/tools.logging "0.4.1"]
                  [cheshire "5.8.1"]

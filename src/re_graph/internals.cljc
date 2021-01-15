@@ -82,7 +82,7 @@
                    provided-instance-name (first event)
                    instance-name (if (contains? re-graph provided-instance-name) provided-instance-name default-instance-name)
                    instance (get re-graph instance-name)
-                   event-name (first (get-coeffect ctx ::rfi/untrimmed-event))
+                   event-name (first (get-coeffect ctx :original-event))
                    trimmed-event (->> (if (= provided-instance-name instance-name)
                                         (subvec event 1)
                                         event)
