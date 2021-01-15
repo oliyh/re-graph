@@ -1,6 +1,6 @@
 (ns re-graph.internals
   (:require [re-frame.core :as re-frame]
-            [re-frame.interceptor :refer [->interceptor get-coeffect assoc-coeffect update-coeffect get-effect assoc-effect enqueue]]
+            [re-frame.interceptor :refer [->interceptor get-coeffect assoc-coeffect update-coeffect get-effect assoc-effect]]
             [re-frame.std-interceptors :as rfi]
             [re-frame.interop :refer [empty-queue]]
             [re-graph.logging :as log]
@@ -99,7 +99,7 @@
                      (cons-interceptor (rfi/path :re-graph instance-name))
                      (assoc-coeffect :event trimmed-event))
 
-                 :default
+                 :else
                  (do (log/error "No default instance of re-graph found but no valid instance name was provided. Valid instance names are:" (keys re-graph)
                                 "but was provided with" provided-instance-name
                                 "handling event" event-name)
@@ -203,7 +203,7 @@
 (re-frame/reg-event-fx
  ::on-ws-data
  interceptors
- (fn [{:keys [db] :as cofx} [subscription-id payload :as event]]
+ (fn [{:keys [db]} [subscription-id payload]]
    (if-let [callback-event (get-in db [:subscriptions (name subscription-id) :callback])]
      {:dispatch (conj callback-event payload)}
      (log/warn "No callback-event found for subscription" subscription-id))))
@@ -262,7 +262,7 @@
 
 (defn- on-ws-message [instance-name]
   (fn [m]
-    (let [{:keys [type id payload] :as data} (message->data m)]
+    (let [{:keys [type id payload]} (message->data m)]
       (condp = type
         "data"
         (re-frame/dispatch [::on-ws-data instance-name id payload])
@@ -285,7 +285,7 @@
      (re-frame/dispatch [::on-ws-open instance-name websocket]))))
 
 (defn- on-close [instance-name]
-  (fn [& args]
+  (fn [& _args]
     (re-frame/dispatch [::on-ws-close instance-name])))
 
 (defn- on-error [instance-name]
@@ -301,7 +301,7 @@
 
 (re-frame/reg-fx
   ::connect-ws
-  (fn [[instance-name {{:keys [url sub-protocol impl]} :ws}]]
+  (fn [[instance-name {{:keys [url sub-protocol #?(:clj impl)]} :ws}]]
     #?(:cljs (let [ws (cond
                        (nil? sub-protocol)
                        (js/WebSocket. url)
@@ -364,7 +364,7 @@
   {:requests {}})
 
 (defn http-options
-  [{:keys [http] :or {http {}} :as options}]
+  [{:keys [http] :or {http {}}}]
   (when http
     (let [{:keys [url] :as http-options} (merge http-default-options http http-initial-state)]
       (when url

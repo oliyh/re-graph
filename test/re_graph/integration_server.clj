@@ -3,15 +3,15 @@
             [com.walmartlabs.lacinia.pedestal :as lacinia]
             [com.walmartlabs.lacinia.schema :as schema]))
 
-(defn- resolve-pets [context args parent]
+(defn- resolve-pets [_context _args _parent]
   [{:id 123 :name "Billy"}
    {:id 234 :name "Bob"}
    {:id 345 :name "Beatrice"}])
 
-(defn- create-pet [context args parent]
+(defn- create-pet [_context args _parent]
   (assoc args :id 999))
 
-(defn- stream-pets [context args source-stream]
+(defn- stream-pets [_context args source-stream]
   (let [{:keys [count]} args
         runnable ^Runnable (fn []
                              (dotimes [i count]

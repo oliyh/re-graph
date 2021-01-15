@@ -5,8 +5,8 @@
             [re-frame.db :refer [app-db]]
             [day8.re-frame.test :refer [run-test-sync run-test-async wait-for]
              :refer-macros [run-test-sync run-test-async wait-for]]
-            [clojure.test :refer [deftest is testing run-tests]
-             :refer-macros [deftest is testing run-tests]]
+            [clojure.test :refer [deftest is testing]
+             :refer-macros [deftest is testing]]
             #?@(:clj [[cheshire.core :as json]
                       [hato.client :as hato]
                       [clj-http.client :as clj-http]])))
@@ -502,7 +502,7 @@
         (let [query                "{ things { id } }"
               variables            {:some "variable"}
               http-url             "http://foo.bar/graph-ql"
-              http-server-response (fn [url & [opts respond raise]]
+              http-server-response (fn [_url & [_opts respond _raise]]
                                      (respond {:status 400, :body {:errors [{:message "OK"
                                                                              :extensions {:status 404}}]}}))]
           (init instance-name {:http {:url http-url}
@@ -595,7 +595,7 @@
        (testing "Request can be specified"
          (re-frame/reg-fx
           ::internals/send-http
-          (fn [[_ _ http-url {:keys [request payload]} :as fx-args]]
+          (fn [[_ _ _http-url {:keys [request]}]]
             (is (= expected-request
                    request))))
          (dispatch [::re-graph/query "{ things { id } }" {:some "variable"} [::on-thing]])
@@ -903,7 +903,7 @@
      (let [last-http-message (atom nil)]
        (re-frame/reg-fx
         ::internals/send-http
-        (fn [[_ _ http-url {:keys [request]} :as fx-args]]
+        (fn [[_ _ _http-url {:keys [request]} :as fx-args]]
           (reset! last-http-message request)
           (dispatch-response fx-args {})))
 

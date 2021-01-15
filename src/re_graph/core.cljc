@@ -8,7 +8,7 @@
 (re-frame/reg-event-fx
  ::mutate
  interceptors
- (fn [{:keys [db dispatchable-event instance-name]} [query-id query variables callback-event :as event]]
+ (fn [{:keys [db dispatchable-event instance-name]} [query-id query variables callback-event]]
    (let [query (str "mutation " (string/replace query #"^mutation\s?" ""))
          websocket-supported? (contains? (get-in db [:ws :supported-operations]) :mutate)]
      (cond
@@ -62,7 +62,7 @@
 (re-frame/reg-event-fx
  ::query
  interceptors
- (fn [{:keys [db dispatchable-event instance-name]} [query-id query variables callback-event :as event]]
+ (fn [{:keys [db dispatchable-event instance-name]} [query-id query variables callback-event]]
    (let [query (str "query " (string/replace query #"^query\s?" ""))
          websocket-supported? (contains? (get-in db [:ws :supported-operations]) :query)]
      (cond
@@ -132,7 +132,7 @@
 (re-frame/reg-event-fx
  ::subscribe
  interceptors
- (fn [{:keys [db instance-name dispatchable-event] :as cofx} [subscription-id query variables callback-event :as event]]
+ (fn [{:keys [db instance-name dispatchable-event]} [subscription-id query variables callback-event]]
    (cond
      (get-in db [:subscriptions (name subscription-id) :active?])
      {} ;; duplicate subscription
@@ -165,7 +165,7 @@
 (re-frame/reg-event-fx
  ::unsubscribe
  interceptors
- (fn [{:keys [db instance-name]} [subscription-id :as event]]
+ (fn [{:keys [db instance-name]} [subscription-id]]
    (if (get-in db [:ws :ready?])
      {:db (update db :subscriptions dissoc (name subscription-id))
       ::internals/send-ws [(get-in db [:ws :connection])

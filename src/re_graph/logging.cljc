@@ -2,8 +2,7 @@
 (ns re-graph.logging
   (:refer-clojure :exclude [time])
   (:require #?(:clj  [clojure.tools.logging :as log]
-               :cljs [goog.log :as glog]))
-  #?(:cljs (:import goog.debug.Console)))
+               :cljs [goog.log :as glog])))
 
 #?(:cljs
    (def logger

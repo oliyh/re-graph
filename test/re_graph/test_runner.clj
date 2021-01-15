@@ -6,5 +6,5 @@
   (with-server
     #(fig/-main "-co" "test.cljs.edn" "-m" "re-graph.figwheel-runner")))
 
-(defn -main [& args]
+(defn -main [& _args]
   (run-tests))

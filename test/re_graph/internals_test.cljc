@@ -1,9 +1,9 @@
 (ns re-graph.internals-test
   (:require [re-graph.internals :as internals]
-            [day8.re-frame.test :refer [run-test-sync run-test-async wait-for]
-             :refer-macros [run-test-sync run-test-async wait-for]]
-            [clojure.test :refer [deftest is testing run-tests]
-             :refer-macros [deftest is testing run-tests]]))
+            [day8.re-frame.test :refer [run-test-sync]
+             :refer-macros [run-test-sync]]
+            [clojure.test :refer [deftest is testing]
+             :refer-macros [deftest is testing]]))
 
 (defn- run-options-test
   []

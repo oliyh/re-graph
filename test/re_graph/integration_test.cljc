@@ -2,9 +2,8 @@
   (:require [re-graph.core :as re-graph]
             [re-graph.internals :as internals]
             #?(:clj [clojure.test :refer [deftest testing is use-fixtures]]
-               :cljs [cljs.test :refer-macros [deftest testing is use-fixtures]])
-            [day8.re-frame.test :refer [run-test-sync run-test-async wait-for]
-             :refer-macros [run-test-sync]]
+               :cljs [cljs.test :refer-macros [deftest testing is]])
+            [day8.re-frame.test :refer [run-test-async wait-for #?(:clj run-test-sync)]]
             [re-frame.core :as re-frame]
             [re-frame.db :as rfdb]
             #?(:clj [re-graph.integration-server :refer [with-server]])))
@@ -92,7 +91,7 @@
 
     (re-frame/reg-fx
      ::internals/disconnect-ws
-     (fn [[ws]]
+     (fn [_]
        (re-frame/dispatch [::ws-disconnected])))
 
     (re-frame/reg-event-fx
@@ -139,7 +138,7 @@
 
    (re-frame/reg-fx
     ::internals/disconnect-ws
-    (fn [[ws]]
+    (fn [_]
       (re-frame/dispatch [::ws-disconnected])))
 
    (re-frame/reg-event-fx
