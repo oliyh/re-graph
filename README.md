@@ -103,6 +103,7 @@ Dispatch the `init` event to bootstrap it and then use the `:subscribe`, `:unsub
 
 ;; perform a query, with the response sent to the callback event provided
 (re-frame/dispatch [::re-graph/query
+                    :my-query-id         ;; unique id for this query
                     "{ things { id } }"  ;; your graphql query
                     {:some "variable"}   ;; arguments map
                     [::on-thing]])       ;; callback event when response is recieved
