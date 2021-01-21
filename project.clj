@@ -1,4 +1,4 @@
-(defproject re-graph "0.1.15"
+(defproject re-graph "0.1.16-SNAPSHOT"
   :description "GraphQL client for re-frame applications"
   :url "https://github.com/oliyh/re-graph"
   :license {:name "Eclipse Public License"
