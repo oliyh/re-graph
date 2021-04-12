@@ -6,16 +6,7 @@
 
 #?(:cljs
    (def logger
-     (glog/getLogger "app")))
-
-#?(:cljs
-   (def levels {:severe goog.debug.Logger.Level.SEVERE
-                :warning goog.debug.Logger.Level.WARNING
-                :info goog.debug.Logger.Level.INFO
-                :config goog.debug.Logger.Level.CONFIG
-                :fine goog.debug.Logger.Level.FINE
-                :finer goog.debug.Logger.Level.FINER
-                :finest goog.debug.Logger.Level.FINEST}))
+     (glog/getLogger "re-graph" nil)))
 
 #?(:cljs
    (defn log-to-console! []
@@ -23,7 +14,7 @@
 
 #?(:cljs
    (defn set-level! [level]
-     (.setLevel logger (get levels level (:info levels)))))
+     (.setLevel logger level)))
 
 (defn fmt [msgs]
   (apply str (interpose " " (map pr-str msgs))))

@@ -6,4 +6,5 @@
  :preloads [devtools.preload]
  :external-config {:devtools/config {:features-to-install    [:formatters :hints]
                                      :fn-symbol              "F"
-                                     :print-config-overrides true}}}
+                                     :print-config-overrides true}}
+ :parallel-build true}
