@@ -21,13 +21,13 @@
                  [cheshire "5.8.1"]
                  [re-graph.hato :version]]
   :profiles {:provided {:dependencies [[org.clojure/clojure "1.10.3"]
-                                       [org.clojure/clojurescript "1.10.844"]]}
+                                       [org.clojure/clojurescript "1.10.914"]]}
              :dev      {:source-paths   ["dev" "hato/src"]
                         :resource-paths ["dev-resources"]
                         :dependencies   [[org.clojure/tools.reader "1.3.4"]
-                                         [binaryage/devtools "0.9.10"]
+                                         [binaryage/devtools "1.0.4"]
                                          [day8.re-frame/test "0.1.5"]
-                                         [com.bhauman/figwheel-main "0.2.13" :exclusions [org.eclipse.jetty.websocket/websocket-server
+                                         [com.bhauman/figwheel-main "0.2.15" :exclusions [org.eclipse.jetty.websocket/websocket-server
                                                                                           org.eclipse.jetty.websocket/websocket-servlet]]
                                          [clj-http-fake "1.0.3"]
 
