@@ -77,10 +77,10 @@
 
       (testing "error handling"
         (is (= {:errors
-                [{:message "Cannot query field `malformed' on type `QueryRoot'.",
+                [{:message "Cannot query field `malformed' on type `Query'.",
                   :locations [{:line 1, :column 9}],
-                  :extensions {:type "QueryRoot"
-                               :field "malformed"
+                  :extensions {:type-name "Query"
+                               :field-name "malformed"
                                :status 400}}]}
                (re-graph/query-sync "{ malformed }" {})))))))
 
