@@ -26,7 +26,8 @@
                                          "hato/src"
                                          ;;"clj-http-gniazdo/src"
                                          ]
-                        :resource-paths ["dev-resources"]
+                        :resource-paths ["dev-resources" "target"]
+                        :clean-targets ^{:protect false} ["target"]
                         :dependencies   [[org.clojure/tools.reader "1.3.6"]
                                          [binaryage/devtools "1.0.4"]
                                          [day8.re-frame/test "0.1.5"]
