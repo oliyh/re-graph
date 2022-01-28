@@ -64,8 +64,7 @@
                                          [hato "0.8.2"]
 
                                          ;; clj-http-gniazdo
-                                         ;;[clj-http "3.10.0"] ;; something breaks with this version, todo with thread pool perhaps?
-                                         [clj-http "3.9.1"]
+                                         [clj-http "3.12.3"] ;; something breaks with this version, todo with thread pool perhaps?
                                          [stylefruits/gniazdo "1.2.0"]]
                         :repl-options   {:init-ns user}}
              :clj-http-gniazdo {:source-paths ["clj-http-gniazdo/src"]}}
