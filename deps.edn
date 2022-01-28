@@ -1,6 +1,6 @@
-{:deps  {re-frame                  {:mvn/version "0.10.6"}
-         cljs-http                 {:mvn/version "0.1.45"}
-         cheshire                  {:mvn/version "5.8.1"}
-         re-graph.hato             {:mvn/version "0.1.13-SNAPSHOT"}
-         org.clojure/tools.logging {:mvn/version "0.4.1"}}
+{:deps  {re-frame                  {:mvn/version "1.2.0"}
+         cljs-http                 {:mvn/version "0.1.46"}
+         cheshire                  {:mvn/version "5.10.2"}
+         re-graph.hato             {:mvn/version "0.1.17-SNAPSHOT"}
+         org.clojure/tools.logging {:mvn/version "1.2.4"}}
  :paths ["src"]}

@@ -3,7 +3,7 @@
             [re-graph.internals :as internals]
             #?(:clj [clojure.test :refer [deftest testing is use-fixtures]]
                :cljs [cljs.test :refer-macros [deftest testing is]])
-            [day8.re-frame.test :refer [run-test-async wait-for #?(:clj run-test-sync)]]
+            [day8.re-frame.test :refer [run-test-async wait-for #?(:clj with-temp-re-frame-state)]]
             [re-frame.core :as re-frame]
             [re-frame.db :as rfdb]
             #?(:clj [re-graph.integration-server :refer [with-server]])))
@@ -59,30 +59,30 @@
 
 #?(:clj
    (deftest sync-http-test
-     (run-test-sync
-      (re-graph/init {:ws nil
-                      :http {:url "http://localhost:8888/graphql"}})
+     (with-temp-re-frame-state
+       (re-graph/init {:ws nil
+                       :http {:url "http://localhost:8888/graphql"}})
 
-      (testing "sync query"
-        (is (= {:data
-                {:pets
-                 [{:id "123", :name "Billy"}
-                  {:id "234", :name "Bob"}
-                  {:id "345", :name "Beatrice"}]}}
-               (re-graph/query-sync "{ pets { id name } }" {}))))
+       (testing "sync query"
+         (is (= {:data
+                 {:pets
+                  [{:id "123", :name "Billy"}
+                   {:id "234", :name "Bob"}
+                   {:id "345", :name "Beatrice"}]}}
+                (re-graph/query-sync "{ pets { id name } }" {}))))
 
-      (testing "sync mutate"
-        (is (= {:data {:createPet {:id "999", :name "Zorro"}}}
-               (re-graph/mutate-sync "mutation { createPet(name: \"Zorro\") { id name } }" {}))))
+       (testing "sync mutate"
+         (is (= {:data {:createPet {:id "999", :name "Zorro"}}}
+                (re-graph/mutate-sync "mutation { createPet(name: \"Zorro\") { id name } }" {}))))
 
-      (testing "error handling"
-        (is (= {:errors
-                [{:message "Cannot query field `malformed' on type `QueryRoot'.",
-                  :locations [{:line 1, :column 9}],
-                  :extensions {:type "QueryRoot"
-                               :field "malformed"
-                               :status 400}}]}
-               (re-graph/query-sync "{ malformed }" {})))))))
+       (testing "error handling"
+         (is (= {:errors
+                 [{:message "Cannot query field `malformed' on type `Query'.",
+                   :locations [{:line 1, :column 9}],
+                   :extensions {:type-name "Query"
+                                :field-name "malformed"
+                                :status 400}}]}
+                (re-graph/query-sync "{ malformed }" {})))))))
 
 (deftest websocket-query-test
    (run-test-async

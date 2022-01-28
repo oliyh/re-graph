@@ -1,5 +1,6 @@
 (ns re-graph.interop
   (:require [clj-http.client :as clj-http]
+            [re-frame.events]
             [gniazdo.core :as gniazdo]))
 
 (defn send-ws [instance payload]
@@ -28,5 +29,12 @@
                          :async? true
                          :throw-exceptions false
                          :throw-entire-message? true}))
-             on-success
-             on-error))
+             ;; as of clj-http 3.10.0 the current thread bindings are restored on to the async callbacks
+             ;; which makes re-frame think it's already handling an event, and rejecting any calls
+             ;; to dispatch as a result, so we need to remove that binding explicitly before handling the callback
+             (fn [& args]
+               (binding [re-frame.events/*handling* nil]
+                 (apply on-success args)))
+             (fn [& args]
+               (binding [re-frame.events/*handling* nil]
+                 (apply on-error args)))))
