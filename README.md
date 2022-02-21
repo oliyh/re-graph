@@ -16,6 +16,22 @@ Features include:
 * Simultaneous connection to multiple GraphQL services
 * Handles reauthentication without disruption
 
+## Contents
+- [Usage](#usage)
+  - [Vanilla Clojure/Script](#vanilla-clojurescript)
+  - [re-frame](#re-frame-users)
+- [Options](#options)
+- [Multiple instances](#multiple-instances)
+- [Authentication](#authentication)
+  - [Headers](#headers)
+  - [Connection init payload](#connection-init-payload)
+  - [Cookies](#cookies)
+  - [Token in query param](#token-in-query-param)
+  - [Basic auth](#basic-auth)
+  - [Sub-protocol hack](#sub-protocol-hack)
+- [Re-initialisation](#re-initialisation)
+- [Development](#development)
+
 ## Usage
 
 Add re-graph to your project's dependencies:
@@ -179,9 +195,49 @@ All function/event signatures now take an optional instance-name as the first ar
 (re-graph/unsubscribe :service-b :my-subscription-id)
 ```
 
-## Cookie Management
+## Authentication
 
-When using re-graph within a browser, cookies are shared between HTTP and WebSocket connection automatically. There's nothing special that needs to be done.
+There are several methods of authenticating with the server, with various trade-offs. Most complications relate to the websocket connection from the browser, as the usual method of providing an `Authorization` header is [not (currently) possible](https://github.com/whatwg/html/issues/3062).
+
+- [Headers](#headers)
+- [Connection init payload](#connection-init-payload)
+- [Cookies](#cookies)
+- [Token in query param](#token-in-query-param)
+- [Basic auth](#basic-auth)
+- [Sub-protocol hack](#sub-protocol-hack)
+
+### Headers
+
+The most conventional way to authenticate is to use HTTP headers on requests to the server and include an authentication token:
+
+```clojure
+(re-frame/dispatch
+  [::re-graph/init
+    {:ws {:impl {:headers {:Authorization "my-auth-token"}}}
+     :http {:impl {:headers {:Authorization "my-auth-token"}}}}])
+```
+
+This will work for the following cases:
+- JVM for websockets and http (using hato)
+- Browser for http only
+
+Note that it **will not** work for websocket connections from the browser, for which you will have to choose one of the other methods described below.
+
+### Connection init payload
+
+For websocket connections, the [de-facto Apollo spec](https://www.apollographql.com/docs/graphql-subscriptions/authentication/) defines a `connection_init` message which is sent after the websocket connection has been established, but before any GraphQL traffic. This can be used to contain an authentication token which can be associated with the connection, or the connection can be terminated.
+
+```clj
+(re-frame/dispatch
+  [::re-graph/init
+    {:ws {:connection-init-payload {:token "my-auth-token"}}}])
+```
+
+Note that for Hasura, and possibly other Apollo server backed instances, your payload may need to look like `{:headers {:authorization (str "Bearer " jwt)}}`
+
+### Cookies
+
+When using re-graph within a browser, site cookies are shared between HTTP and WebSocket connection automatically. There's nothing special that needs to be done.
 
 When using re-graph with Clojure, however, some configuration is necessary to ensure that the same cookie store is used for both HTTP and WebSocket connections.
 
@@ -206,6 +262,42 @@ When initializing re-graph, configure both the HTTP and WebSocket connections wi
 ```
 
 In the call, you can provide any supported re-graph or hato options. Be careful though; hato convenience options for the HTTP client will be ignored when using the `:http-client` option.
+
+If you are using lacinia, you probably need to use the `:init-context` option of the [listener-fn-factory](https://github.com/walmartlabs/lacinia-pedestal/blob/v1.1/src/com/walmartlabs/lacinia/pedestal/subscriptions.clj#L517) to be able to extract the cookie from the underlying webserver request.
+
+### Token in query param
+
+You can put a token in the http and websocket urls and use it to authenticate when handling the request.
+
+```clj
+(re-frame/dispatch
+  [::re-graph/init
+    {:http {:url "https://my-server.com/graphql?auth=my-auth-token"}
+     :ws {:url "wss://my-server.com/graphql-ws?auth=my-auth-token"}}])
+```
+
+Note that query params may be included in the log files of the server.
+
+### Basic auth
+
+You can put basic auth in the http and websocket urls and use it to authenticate when handling the request.
+
+```clj
+(re-frame/dispatch
+  [::re-graph/init
+    {:http {:url "https://my-user:my-password@my-server.com/graphql"}
+     :ws {:url "wss://my-user:my-password@my-server.com/graphql-ws"}}])
+```
+
+### Sub-protocol hack
+
+As mentioned in [https://github.com/whatwg/html/issues/3062](https://github.com/whatwg/html/issues/3062) it is contentious but possible to smuggle authentication in the websocket sub-protocol, which normally describes the kind of traffic expected over the websocket (the default in re-graph is `graphql-ws`).
+
+```clojure
+(re-frame/dispatch
+  [::re-graph/init
+    {:ws {:sub-protocol "graphql-ws;my-auth-token"}}])
+```
 
 ## Re-initialisation
 
