@@ -1,5 +1,5 @@
-(ns re-graph.core-test
-  (:require [re-graph.core :as re-graph]
+(ns re-graph.core-deprecated-test
+  (:require [re-graph.core-deprecated :as re-graph]
             [re-graph.internals :as internals :refer [default-instance-name]]
             [re-frame.core :as re-frame]
             [re-frame.db :refer [app-db]]
@@ -243,14 +243,15 @@
                      payload)))
              (swap! sent-msgs inc)))
 
+          ;; todo this makes fire
           (dispatch subscription-registration)
 
-          (on-close)
-          (wait-for
+          #_(on-close)
+          #_(wait-for
            [::internals/on-ws-close]
            (is (false? (get-in (db-instance) [:ws :ready?])))
 
-           (testing "websocket is reconnected"
+          (testing "websocket is reconnected"
              (wait-for [::internals/on-ws-open]
                        (is (get-in (db-instance) [:ws :ready?]))
 
@@ -342,8 +343,8 @@
 
        (is @http-called?)))))
 
-(defn- dispatch-response [[instance-name query-id] payload]
-  (re-frame/dispatch [::internals/http-complete instance-name query-id payload]))
+(defn- dispatch-response [event payload]
+  (re-frame/dispatch [::internals/http-complete (assoc event :response payload)]))
 
 (defn- run-http-query-test [instance-name]
   (let [dispatch (partial dispatch-to-instance instance-name)]
@@ -360,13 +361,14 @@
 
            (re-frame/reg-fx
             ::internals/send-http
-            (fn [[_ _ http-url {:keys [payload]} :as fx-args]]
+            (fn [{:keys [url payload event]}]
+              (println "query http mock" event)
               (is (= expected-query-payload
                      payload))
 
-              (is (= expected-http-url http-url))
+              (is (= expected-http-url url))
 
-              (dispatch-response fx-args expected-response-payload)))
+              (dispatch-response event expected-response-payload)))
 
            (re-frame/reg-event-db
             ::on-thing
@@ -383,8 +385,8 @@
            (let [id :abc-123]
              (re-frame/reg-fx
               ::internals/send-http
-              (fn [[_ query-id]]
-                (is (= id query-id))))
+              (fn [{:keys [event]}]
+                (is (= id (:query-id event)))))
 
              (dispatch [::re-graph/query id "{ things { id } }" {:some "variable"} [::on-thing]])
 
@@ -415,9 +417,9 @@
         (fn [fx-args]
           (let [response @mock-response
                 {:keys [status error-code]} response]
-            (dispatch-response fx-args (if (= :no-error error-code)
-                                         (:body response)
-                                         (insert-http-status (:body response) status))))))
+            (dispatch-response (:event fx-args) (if (= :no-error error-code)
+                                                  (:body response)
+                                                  (insert-http-status (:body response) status))))))
 
        (re-frame/reg-event-db
         ::on-thing
@@ -546,10 +548,10 @@
 
            (re-frame/reg-fx
             ::internals/send-http
-            (fn [[_ _ http-url {:keys [payload]} :as fx-args]]
+            (fn [{:keys [event url payload]}]
               (is (= expected-query-payload payload))
-              (is (= expected-http-url http-url))
-              (dispatch-response fx-args expected-response-payload)))
+              (is (= expected-http-url url))
+              (dispatch-response event expected-response-payload)))
 
            (re-frame/reg-event-db
             ::on-mutate
@@ -566,8 +568,8 @@
            (let [id :abc-123]
              (re-frame/reg-fx
               ::internals/send-http
-              (fn [[_ query-id]]
-                (is (= id query-id))))
+              (fn [{:keys [event]}]
+                (is (= id (:query-id event)))))
 
              (dispatch [::re-graph/mutate id mutation params [::on-thing]])
 
@@ -595,12 +597,11 @@
        (testing "Request can be specified"
          (re-frame/reg-fx
           ::internals/send-http
-          (fn [[_ _ _http-url {:keys [request]}]]
+          (fn [{:keys [request]}]
             (is (= expected-request
                    request))))
          (dispatch [::re-graph/query "{ things { id } }" {:some "variable"} [::on-thing]])
          (dispatch [::re-graph/mutate "don't care" {:some "variable"} [::on-thing]]))))))
-
 
 (deftest http-parameters-test
   (run-http-parameters-test nil))
