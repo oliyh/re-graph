@@ -3,40 +3,24 @@
   (:require [re-frame.core :as re-frame]
             [re-graph.internals :as internals
              :refer [interceptors default-instance-name]]
+            [re-graph.core :as core]
             [re-graph.logging :as log]
             [clojure.string :as string]))
 
+;; todo copy existing interceptors into here
+(def interceptors
+  internals/interceptors)
 
+;; todo do the minimum here to be able to dispatch into the canonical ns
 (re-frame/reg-event-fx
  ::mutate
  interceptors
  (fn [{:keys [db dispatchable-event instance-name]} [query-id query variables callback-event]]
-   (let [query (str "mutation " (string/replace query #"^mutation\s?" ""))
-         websocket-supported? (contains? (get-in db [:ws :supported-operations]) :mutate)]
-     (cond
-       (or (get-in db [:http :requests query-id])
-           (get-in db [:subscriptions query-id]))
-       {} ;; duplicate in-flight mutation
-
-       (and websocket-supported? (get-in db [:ws :ready?]))
-       {:db (assoc-in db [:subscriptions query-id] {:callback callback-event})
-        ::internals/send-ws [(get-in db [:ws :connection])
-                             {:id query-id
-                              :type "start"
-                              :payload {:query query
-                                        :variables variables}}]}
-
-       (and websocket-supported? (:ws db))
-       {:db (update-in db [:ws :queue] conj dispatchable-event)}
-
-       :else
-       {:db (assoc-in db [:http :requests query-id] {:callback callback-event})
-        ::internals/send-http [instance-name
-                               query-id
-                               (get-in db [:http :url])
-                               {:request (get-in db [:http :impl])
-                                :payload {:query query
-                                          :variables variables}}]}))))
+   {:dispatch [::core/mutate {:instance-name instance-name
+                              :query-id query-id
+                              :query query
+                              :variables variables
+                              :callback-event callback-event}]}))
 
 (defn mutate
   "Execute a GraphQL mutation. The arguments are:
