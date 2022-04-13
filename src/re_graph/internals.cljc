@@ -90,7 +90,8 @@
 
                (cond
                  (:destroyed? instance)
-                 ctx
+                 (do (log/error "It looks like the re-graph instance has been destroyed, so cannot handle event" event-name)
+                     ctx)
 
                  instance
                  (-> ctx
@@ -99,10 +100,21 @@
                      (cons-interceptor (rfi/path :re-graph instance-name))
                      (assoc-coeffect :event trimmed-event))
 
-                 :else
+                 (and provided-instance-name (seq (keys re-graph)))
                  (do (log/error "No default instance of re-graph found but no valid instance name was provided. Valid instance names are:" (keys re-graph)
                                 "but was provided with" provided-instance-name
                                 "handling event" event-name)
+                     ctx)
+
+                 (nil? re-graph)
+                 (do (log/error "It looks like re-graph has not been initialised yet, so cannot handle event" event-name)
+                     ctx)
+
+                 :else
+                 (do (log/error "No re-graph valid re-graph instance found. Valid instance ids are:" (keys re-graph)
+                                "but was provided with instance id" provided-instance-name
+                                "handling event" event-name
+                                "Have you initialised re-graph properly?")
                      ctx))))))
 
 (def interceptors
