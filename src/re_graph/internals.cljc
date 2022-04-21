@@ -73,10 +73,6 @@
              (let [re-graph (:re-graph (get-coeffect ctx :db))
                    instance-name (:instance-name (get-coeffect ctx :event) default-instance-name)
                    instance (get re-graph instance-name)]
-               (println "handling event" (first (get-coeffect ctx :original-event)))
-               (println "instance-name" instance-name)
-               (println "instance" instance)
-               (println "ctx" ctx)
                (if instance
                  (-> ctx
                      (update-coeffect :event assoc :instance-name instance-name)
@@ -189,13 +185,13 @@
 (re-frame/reg-event-db
  ::on-ws-complete
  interceptors
- (fn [db [subscription-id]]
-   (update-in db [:subscriptions] dissoc (name subscription-id))))
+ (fn [db {:keys [id]}]
+   (update-in db [:subscriptions] dissoc (name id))))
 
 (re-frame/reg-event-fx
  ::connection-init
  interceptors
-  (fn [{:keys [db]} _]
+ (fn [{:keys [db]} _]
     (let [ws (get-in db [:ws :connection])
           payload (get-in db [:ws :connection-init-payload])]
       (when payload
@@ -212,14 +208,13 @@
                     :connection websocket
                     :ready? true
                     :queue [])}
-
     (let [resume? (get-in db [:ws :resume-subscriptions?])
           subscriptions (when resume? (->> db :subscriptions vals (map :event)))
           queue (get-in db [:ws :queue])
           to-send (concat [[::connection-init {:instance-name instance-name}]]
                           subscriptions
                           queue)]
-      {:dispatch-n to-send}))))
+      {:dispatch-n (vec to-send)}))))
 
 (defn- deactivate-subscriptions [subscriptions]
   (reduce-kv (fn [subs sub-id sub]
@@ -231,15 +226,12 @@
  ::on-ws-close
  interceptors
  (fn [{:keys [db]} {:keys [instance-name]}]
-   (println "running on-ws-close" instance-name)
-   (println "subs are" (:subscriptions db))
    (merge
     {:db (let [new-db (-> db
                           (assoc-in [:ws :ready?] false)
                           (update :subscriptions deactivate-subscriptions))]
            new-db)}
     (when-let [reconnect-timeout (get-in db [:ws :reconnect-timeout])]
-      (println "going to reconnect")
       {:dispatch-later [{:ms reconnect-timeout
                          :dispatch [::reconnect-ws {:instance-name instance-name}]}]}))))
 
@@ -253,7 +245,8 @@
                                           :payload payload}])
 
         "complete"
-        (re-frame/dispatch [::on-ws-complete instance-name id])
+        (re-frame/dispatch [::on-ws-complete {:instance-name instance-name
+                                              :id id}])
 
         "error"
         (re-frame/dispatch [::on-ws-data {:instance-name instance-name
@@ -268,7 +261,7 @@
      ((on-open instance-name websocket))))
   ([instance-name websocket]
    (fn []
-     (log/info "opened ws xyz" websocket)
+     (log/info "opened ws" instance-name websocket)
      (re-frame/dispatch [::on-ws-open {:instance-name instance-name
                                        :websocket websocket}]))))
 

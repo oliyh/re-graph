@@ -1,5 +1,6 @@
 (ns re-graph.core-deprecated-test
   (:require [re-graph.core-deprecated :as re-graph]
+            [re-graph.core :as re-graph-core]
             [re-graph.internals :as internals :refer [default-instance-name]]
             [re-frame.core :as re-frame]
             [re-frame.db :refer [app-db]]
@@ -209,7 +210,8 @@
 (defn- run-websocket-reconnection-test [instance-name]
   (let [dispatch (partial dispatch-to-instance instance-name)
         db-instance #(get-in @app-db [:re-graph (or instance-name default-instance-name)])
-        on-close (on-close (or instance-name default-instance-name))]
+        on-close (on-close (or instance-name default-instance-name))
+        sent-msgs (atom [])]
     (run-test-async
      (install-websocket-stub!)
 
@@ -218,50 +220,58 @@
       (fn [[{:keys [dispatch]}]]
         (re-frame/dispatch dispatch)))
 
+     (re-frame/reg-fx
+      ::internals/send-ws
+      (fn [[ws payload]]
+        (is (= ::websocket-connection ws))
+        (is (or
+             (= "connection_init" (:type payload))
+             (= {:id "my-sub"
+                 :type "start"
+                 :payload {:query "subscription { things { id } }"
+                           :variables {:some "variable"}}}
+                payload)))
+        (swap! sent-msgs conj payload)))
+
      (testing "websocket reconnects when disconnected"
        (init instance-name {:ws {:url                     "ws://socket.rocket"
                                  :connection-init-payload {:token "abc"}
                                  :reconnect-timeout       0}})
 
-       (wait-for
-        [::internals/on-ws-open]
-        (is (get-in (db-instance) [:ws :ready?]))
+       (let [{:keys [subscription-id
+                     query
+                     variables
+                     callback-event]
+              :as subscription-params}
+             {:instance-name (or instance-name default-instance-name)
+              :subscription-id :my-sub
+              :query "{ things { id } }"
+              :variables {:some "variable"}
+              :callback-event [::on-thing]
+              :legacy? true}]
 
-        ;; create a subscription and wait for it to be sent
-        (let [subscription-registration [::re-graph/subscribe :my-sub "{ things { id } }" {:some "variable"} [::on-thing]]
-              sent-msgs (atom 0)]
-          (re-frame/reg-fx
-           ::internals/send-ws
-           (fn [[ws payload]]
-             (is (= ::websocket-connection ws))
-             (is (or
-                  (= "connection_init" (:type payload))
-                  (= {:id "my-sub"
-                      :type "start"
-                      :payload {:query "subscription { things { id } }"
-                                :variables {:some "variable"}}}
-                     payload)))
-             (swap! sent-msgs inc)))
 
-          ;; todo this makes fire
-          (dispatch subscription-registration)
+         (wait-for
+          [::internals/on-ws-open]
+          (is (get-in (db-instance) [:ws :ready?]))
 
-          #_(on-close)
-          #_(wait-for
-           [::internals/on-ws-close]
-           (is (false? (get-in (db-instance) [:ws :ready?])))
+          ;; create a subscription and wait for it to be sent
+          (dispatch [::re-graph/subscribe subscription-id query variables callback-event])
+          (wait-for [::re-graph-core/subscribe]
+                    (on-close)
+                    (wait-for
+                     [::internals/on-ws-close]
+                     (is (false? (get-in (db-instance) [:ws :ready?])))
 
-          (testing "websocket is reconnected"
-             (wait-for [::internals/on-ws-open]
-                       (is (get-in (db-instance) [:ws :ready?]))
+                     (testing "websocket is reconnected"
+                       (wait-for [::internals/on-ws-open]
+                                 (is (get-in (db-instance) [:ws :ready?]))
 
-                       (testing "subscriptions are resumed"
-                         (wait-for
-                          [(fn [event]
-                             (= (prepend-instance-name (or instance-name default-instance-name) subscription-registration) event))]
-                          ;; 2 connection_init
-                          ;; 2 subscription
-                          (is (= 4 @sent-msgs)))))))))))))
+                                 (testing "subscriptions are resumed"
+                                   (wait-for
+                                    [(fn [event]
+                                       (= [::re-graph-core/subscribe subscription-params] event))]
+                                    (is (= 4 (count @sent-msgs)))))))))))))))
 
 (deftest websocket-reconnection-test
   (run-websocket-reconnection-test nil))
@@ -362,7 +372,6 @@
            (re-frame/reg-fx
             ::internals/send-http
             (fn [{:keys [url payload event]}]
-              (println "query http mock" event)
               (is (= expected-query-payload
                      payload))
 
@@ -686,11 +695,11 @@
 
              (re-frame/reg-fx
               ::internals/send-http
-              (fn [[_ _ http-url {:keys [payload]} :as fx-args]]
+              (fn [{:keys [url payload] :as fx-args}]
                 (is (= expected-query-payload
                        payload))
 
-                (is (= expected-http-url http-url))
+                (is (= expected-http-url url))
 
                 (dispatch-response fx-args expected-response-payload)))
 
@@ -715,11 +724,11 @@
 
              (re-frame/reg-fx
               ::internals/send-http
-              (fn [[_ _ http-url {:keys [payload]} :as fx-args]]
+              (fn [{:keys [url payload] :as fx-args}]
                 (is (= expected-query-payload
                        payload))
 
-                (is (= expected-http-url http-url))
+                (is (= expected-http-url url))
 
                 (dispatch-response fx-args expected-response-payload)))
 
