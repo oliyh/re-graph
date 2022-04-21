@@ -171,8 +171,9 @@
 
 (re-frame/reg-event-fx
  ::callback
- (fn [_ [_ callback-fn payload]]
-   {::call-callback [callback-fn payload]}))
+ [re-frame/unwrap]
+ (fn [_ {:keys [callback-fn response]}]
+   {::call-callback [callback-fn response]}))
 
 (re-frame/reg-event-fx
  ::on-ws-data
@@ -358,19 +359,16 @@
       synchronously. Will return a GraphQL error response if no response is
       received before the timeout (default 3000ms) expires. Will throw if the
       call returns an exception."
-     [f & args]
-     (let [timeout  (when (int? (last args)) (last args))
-           timeout' (or timeout 3000)
-           p        (promise)
-           callback (fn [result] (deliver p result))
-           args'    (conj (vec (if timeout (butlast args) args))
-                          callback)]
-       (apply f args')
+     [f {:keys [timeout]
+         :or {timeout 3000}
+         :as opts}]
+     (let [p        (promise)
+           callback (fn [result] (deliver p result))]
+       (f (assoc opts :callback-event callback))
 
        ;; explicit timeout to avoid unreliable aborts from underlying implementations
-       (let [result (deref p timeout' ::timeout)]
+       (let [result (deref p timeout ::timeout)]
          (if (= ::timeout result)
            {:errors [{:message "re-graph did not receive response from server"
-                      :timeout timeout'
-                      :args args}]}
+                      :opts opts}]}
            result)))))

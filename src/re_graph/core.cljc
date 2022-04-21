@@ -12,7 +12,7 @@
  ::mutate
  interceptors
  (fn [{:keys [db]} {:keys [query-id query variables callback-event]
-                    :or {query-id internals/generate-query-id}
+                    :or {query-id (internals/generate-query-id)}
                     :as event-payload}]
 
    (let [query (str "mutation " (string/replace query #"^mutation\s?" ""))
@@ -49,9 +49,8 @@
   If the optional `instance-name` is not provided, the default instance is
   used. The callback function will receive the result of the mutation as its
   sole argument."
-  [& args]
-  (let [callback-fn (last args)]
-    (re-frame/dispatch (into [::mutate] (conj (vec (butlast args)) [::internals/callback callback-fn])))))
+  [opts]
+  (re-frame/dispatch [::mutate (update opts :callback-event (fn [f] [::internals/callback {:callback-fn f}]))]))
 
 #?(:clj
    (def
@@ -68,7 +67,7 @@
  ::query
  interceptors
  (fn [{:keys [db]} {:keys [query-id query variables callback-event]
-                    :or {query-id internals/generate-query-id}
+                    :or {query-id (internals/generate-query-id)}
                     :as event-payload}]
    (let [query (str "query " (string/replace query #"^query\s?" ""))
          websocket-supported? (contains? (get-in db [:ws :supported-operations]) :query)]
@@ -104,9 +103,8 @@
   If the optional `instance-name` is not provided, the default instance is
   used. The callback function will receive the result of the query as its
   sole argument."
-  [& args]
-  (let [callback-fn (last args)]
-    (re-frame/dispatch (into [::query] (conj (vec (butlast args)) [::internals/callback callback-fn])))))
+  [opts]
+  (re-frame/dispatch [::query (update opts :callback-event (fn [f] [::internals/callback {:callback-fn f}]))]))
 
 #?(:clj
    (def
@@ -163,10 +161,8 @@
         " on instance " instance-name
          ": Websocket is not enabled, subscriptions are not possible. Please check your re-graph configuration")))))
 
-(defn subscribe
-  ([subscription-id query variables callback-fn] (subscribe default-instance-name subscription-id query variables callback-fn))
-  ([instance-name subscription-id query variables callback-fn]
-   (re-frame/dispatch [::subscribe instance-name subscription-id query variables [::internals/callback callback-fn]])))
+(defn subscribe [opts]
+  (re-frame/dispatch [::subscribe (update opts :callback-event (fn [f] [::internals/callback {:callback-fn f}]))]))
 
 (re-frame/reg-event-fx
  ::unsubscribe

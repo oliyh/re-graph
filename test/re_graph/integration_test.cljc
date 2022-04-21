@@ -23,7 +23,9 @@
    (register-callback!)
 
    (testing "async query"
-     (re-graph/query "{ pets { id name } }" {} #(re-frame/dispatch [::callback %]))
+     (re-graph/query {:query "{ pets { id name } }"
+                      :variables {}
+                      :callback-event #(re-frame/dispatch [::callback %])})
 
      (wait-for
       [::callback]
@@ -50,7 +52,9 @@
     (register-callback!)
 
     (testing "async mutate"
-      (re-graph/mutate "mutation { createPet(name: \"Zorro\") { id name } }" {} #(re-frame/dispatch [::callback %]))
+      (re-graph/mutate {:query "mutation { createPet(name: \"Zorro\") { id name } }"
+                        :variables {}
+                        :callback-event #(re-frame/dispatch [::callback %])})
 
       (wait-for
        [::callback]
@@ -69,11 +73,13 @@
                   [{:id "123", :name "Billy"}
                    {:id "234", :name "Bob"}
                    {:id "345", :name "Beatrice"}]}}
-                (re-graph/query-sync "{ pets { id name } }" {}))))
+                (re-graph/query-sync {:query "{ pets { id name } }"
+                                      :variables {}}))))
 
        (testing "sync mutate"
          (is (= {:data {:createPet {:id "999", :name "Zorro"}}}
-                (re-graph/mutate-sync "mutation { createPet(name: \"Zorro\") { id name } }" {}))))
+                (re-graph/mutate-sync {:query "mutation { createPet(name: \"Zorro\") { id name } }"
+                                       :variables {}}))))
 
        (testing "error handling"
          (is (= {:errors
@@ -82,7 +88,8 @@
                    :extensions {:type-name "Query"
                                 :field-name "malformed"
                                 :status 400}}]}
-                (re-graph/query-sync "{ malformed }" {})))))))
+                (re-graph/query-sync {:query "{ malformed }"
+                                      :variables {}})))))))
 
 (deftest websocket-query-test
    (run-test-async
@@ -115,8 +122,10 @@
             {:dispatch [::complete]})))))
 
     (testing "subscriptions"
-      (re-graph/subscribe :all-pets "MyPets($count: Int) { pets(count: $count) { id name } }" {:count 5}
-                          #(re-frame/dispatch [::callback %]))
+      (re-graph/subscribe {:subscription-id :all-pets
+                           :query "MyPets($count: Int) { pets(count: $count) { id name } }"
+                           :variables {:count 5}
+                           :callback-event #(re-frame/dispatch [::callback %])})
 
       (wait-for
        [::complete]
