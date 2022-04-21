@@ -695,13 +695,13 @@
 
              (re-frame/reg-fx
               ::internals/send-http
-              (fn [{:keys [url payload] :as fx-args}]
+              (fn [{:keys [url payload event]}]
                 (is (= expected-query-payload
                        payload))
 
                 (is (= expected-http-url url))
 
-                (dispatch-response fx-args expected-response-payload)))
+                (dispatch-response event expected-response-payload)))
 
              (query "{ things { id } }" {:some "variable"} callback-fn)
 
@@ -724,13 +724,12 @@
 
              (re-frame/reg-fx
               ::internals/send-http
-              (fn [{:keys [url payload] :as fx-args}]
+              (fn [{:keys [url payload event]}]
                 (is (= expected-query-payload
                        payload))
 
                 (is (= expected-http-url url))
-
-                (dispatch-response fx-args expected-response-payload)))
+                (dispatch-response event expected-response-payload)))
 
              (mutate "{ things { id } }" {:some "variable"} callback-fn)
 
@@ -757,12 +756,12 @@
 
          (re-frame/reg-fx
           ::internals/send-http
-          (fn [[_ _ http-url {:keys [payload]} :as fx-args]]
+          (fn [{:keys [url payload event]}]
             (is (= expected-query-payload
                    payload))
 
-            (is (= expected-http-url http-url))
-            (dispatch-response fx-args expected-response-payload)))
+            (is (= expected-http-url url))
+            (dispatch-response event expected-response-payload)))
 
          (re-frame/reg-event-db
           ::on-thing
@@ -913,9 +912,9 @@
      (let [last-http-message (atom nil)]
        (re-frame/reg-fx
         ::internals/send-http
-        (fn [[_ _ _http-url {:keys [request]} :as fx-args]]
+        (fn [{:keys [event request]}]
           (reset! last-http-message request)
-          (dispatch-response fx-args {})))
+          (dispatch-response event {})))
 
        (re-frame/dispatch [::re-graph/init {:http {:url "http://foo.bar/graph-ql"
                                                    :impl {:headers {"Authorization" 123}}}

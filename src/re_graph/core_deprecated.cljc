@@ -30,12 +30,6 @@
                                         event)
                                       (ensure-query-id event-name))]
 
-               (println "original event" event)
-               (println "event name" event-name)
-               (println "pin" provided-instance-name)
-               (println "instance name" instance-name)
-               (println "trimmed event" trimmed-event)
-
                (cond
                  (:destroyed? instance)
                  ctx

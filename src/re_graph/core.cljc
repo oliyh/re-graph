@@ -15,8 +15,6 @@
                     :or {query-id internals/generate-query-id}
                     :as event-payload}]
 
-   (println "core mutate db" db)
-
    (let [query (str "mutation " (string/replace query #"^mutation\s?" ""))
          websocket-supported? (contains? (get-in db [:ws :supported-operations]) :mutate)]
      (cond
@@ -189,8 +187,8 @@
 
 (re-frame/reg-event-fx
  ::re-init
- [re-frame/unwrap]
- (fn [{:keys [db instance-name]} [opts]]
+ [re-frame/unwrap internals/select-instance]
+ (fn [{:keys [db]} {:keys [instance-name] :as opts}]
    (let [new-db (internals/deep-merge db opts)]
      (merge {:db new-db}
             (when (get-in new-db [:ws :ready?])
@@ -207,8 +205,6 @@
  (fn [{:keys [db]} {:keys [instance-name ws]
                     :or {instance-name internals/default-instance-name}
                     :as opts}]
-   (println "initing!" opts)
-   (println "new db" (assoc-in db [:re-graph instance-name] opts))
    (merge
     {:db (assoc-in db [:re-graph instance-name] opts)}
     (when ws
