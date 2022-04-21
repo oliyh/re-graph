@@ -188,11 +188,11 @@
 (re-frame/reg-event-fx
  ::re-init
  [re-frame/unwrap internals/select-instance]
- (fn [{:keys [db]} {:keys [instance-name] :as opts}]
+ (fn [{:keys [db]} opts]
    (let [new-db (internals/deep-merge db opts)]
      (merge {:db new-db}
             (when (get-in new-db [:ws :ready?])
-              {:dispatch [::internals/connection-init instance-name]})))))
+              {:dispatch [::internals/connection-init opts]})))))
 
 (defn re-init
   ([opts] (re-init default-instance-name opts))
