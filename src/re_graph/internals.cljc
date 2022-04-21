@@ -279,11 +279,11 @@
  interceptors
  (fn [{:keys [db]} {:keys [instance-name]}]
    (when-not (get-in db [:ws :ready?])
-     {::connect-ws [instance-name db]})))
+     {::connect-ws [instance-name (:ws db)]})))
 
 (re-frame/reg-fx
   ::connect-ws
-  (fn [[instance-name {{:keys [url sub-protocol #?(:clj impl)]} :ws}]]
+  (fn [[instance-name {:keys [url sub-protocol #?(:clj impl)] :as opts}]]
     #?(:cljs (let [ws (cond
                        (nil? sub-protocol)
                        (js/WebSocket. url)

@@ -198,13 +198,17 @@
 (re-frame/reg-event-fx
  ::init
  [re-frame/unwrap]
- (fn [{:keys [db]} {:keys [instance-name ws]
+ (fn [{:keys [db]} {:keys [instance-name]
                     :or {instance-name internals/default-instance-name}
                     :as opts}]
-   (merge
-    {:db (assoc-in db [:re-graph instance-name] opts)}
-    (when ws
-      {::internals/connect-ws [instance-name ws]}))))
+   (let [{:keys [ws] :as opts}
+         (merge opts
+                (internals/ws-options opts)
+                (internals/http-options opts))]
+     (merge
+      {:db (assoc-in db [:re-graph instance-name] opts)}
+      (when ws
+        {::internals/connect-ws [instance-name ws]})))))
 
 (re-frame/reg-event-fx
  ::destroy
