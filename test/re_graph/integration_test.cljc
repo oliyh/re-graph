@@ -131,34 +131,36 @@
                                responses))
                    (is (= 5 (count responses)))
 
-                   (re-graph/destroy)
-                   (wait-for [::re-graph/destroy]
+                   #_(re-graph/destroy)
+                   #_(wait-for [::re-graph/destroy]
                              (println "test complete"))))))))
 
 (deftest websocket-mutation-test
   (run-test-async
    (re-graph/init {:ws {:url "ws://localhost:8888/graphql-ws"}
                    :http nil})
-   (register-callback!)
 
-   (re-frame/reg-fx
-    ::internals/disconnect-ws
-    (fn [_]
-      (re-frame/dispatch [::ws-disconnected])))
+   (wait-for [::re-graph/init]
+             (register-callback!)
 
-   (re-frame/reg-event-fx
-    ::ws-disconnected
-    (fn [& _args]
-      ;; do nothing
-      {}))
+             (re-frame/reg-fx
+              ::internals/disconnect-ws
+              (fn [_]
+                (re-frame/dispatch [::ws-disconnected])))
 
-   (testing "mutations"
-     (testing "async mutate"
-       (re-graph/mutate {:query "mutation { createPet(name: \"Zorro\") { id name } }"
-                         :variables {}
-                         :callback-event  #(re-frame/dispatch [::callback %])})
+             (re-frame/reg-event-fx
+              ::ws-disconnected
+              (fn [& _args]
+                ;; do nothing
+                {}))
 
-       (wait-for
-        [::callback]
-        (is (= {:data {:createPet {:id "999", :name "Zorro"}}}
-               (::response @rfdb/app-db))))))))
+             (testing "mutations"
+               (testing "async mutate"
+                 (re-graph/mutate {:query "mutation { createPet(name: \"Zorro\") { id name } }"
+                                   :variables {}
+                                   :callback-event  #(re-frame/dispatch [::callback %])})
+
+                 (wait-for
+                  [::callback]
+                  (is (= {:data {:createPet {:id "999", :name "Zorro"}}}
+                         (::response @rfdb/app-db)))))))))

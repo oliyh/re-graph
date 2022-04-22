@@ -346,3 +346,5 @@ your option) any later version.
   - subscription-id / query-id - should this just be id?
   - response or payload?
 - Integration test for deprecated core (just copy what it was before)
+- Remove all printlnts
+- REmove re-frame/debug
