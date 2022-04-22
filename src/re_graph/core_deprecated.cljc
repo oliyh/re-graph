@@ -71,7 +71,7 @@
   sole argument."
   [& args]
   (let [callback-fn (last args)]
-    (re-frame/dispatch (into [::mutate] (conj (vec (butlast args)) [::internals/callback callback-fn])))))
+    (re-frame/dispatch (into [::mutate] (conj (vec (butlast args)) [::internals/callback {:callback-fn callback-fn}])))))
 
 #?(:clj
    (def
@@ -105,7 +105,7 @@
   sole argument."
   [& args]
   (let [callback-fn (last args)]
-    (re-frame/dispatch (into [::query] (conj (vec (butlast args)) [::internals/callback callback-fn])))))
+    (re-frame/dispatch (into [::query] (conj (vec (butlast args)) [::internals/callback {:callback-fn callback-fn}])))))
 
 #?(:clj
    (def
@@ -143,9 +143,10 @@
                                  :legacy? true}]}))
 
 (defn subscribe
-  ([subscription-id query variables callback-fn] (subscribe default-instance-name subscription-id query variables callback-fn))
+  ([subscription-id query variables callback-fn]
+   (subscribe default-instance-name subscription-id query variables callback-fn))
   ([instance-name subscription-id query variables callback-fn]
-   (re-frame/dispatch [::subscribe instance-name subscription-id query variables [::internals/callback callback-fn]])))
+   (re-frame/dispatch [::subscribe instance-name subscription-id query variables [::internals/callback {:callback-fn callback-fn}]])))
 
 (re-frame/reg-event-fx
  ::unsubscribe

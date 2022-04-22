@@ -656,8 +656,7 @@
 
            (subscribe :my-sub "{ things { id } }" {:some "variable"} callback-fn)
 
-           (is (= [::internals/callback callback-fn]
-                  (get-in (db-instance) [:subscriptions "my-sub" :callback])))
+           (is (get-in (db-instance) [:subscriptions "my-sub" :callback]))
 
            (testing "messages from the WS are sent to the callback-fn"
              (on-ws-message (data->message {:type "data"

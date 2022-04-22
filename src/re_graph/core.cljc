@@ -66,7 +66,7 @@
 (re-frame/reg-event-fx
  ::query
  interceptors
- (fn [{:keys [db]} {:keys [query-id query variables callback-event]
+ (fn [{:keys [db]} {:keys [query-id query variables callback-event legacy?]
                     :or {query-id (internals/generate-query-id)}
                     :as event-payload}]
    (let [query (str "query " (string/replace query #"^query\s?" ""))
@@ -77,7 +77,8 @@
        {} ;; duplicate in-flight query
 
        (and websocket-supported? (get-in db [:ws :ready?]))
-       {:db (assoc-in db [:subscriptions query-id] {:callback callback-event})
+       {:db (assoc-in db [:subscriptions query-id] {:callback callback-event
+                                                    :legacy? legacy?})
         ::internals/send-ws [(get-in db [:ws :connection])
                              {:id query-id
                               :type "start"
@@ -135,8 +136,8 @@
 
 (re-frame/reg-event-fx
  ::subscribe
- interceptors
- (fn [{:keys [db]} {:keys [subscription-id query variables callback-event instance-name] :as event}]
+ (cons re-frame/debug interceptors)
+ (fn [{:keys [db]} {:keys [subscription-id query variables callback-event instance-name legacy?] :as event}]
    (cond
      (get-in db [:subscriptions (name subscription-id) :active?])
      {} ;; duplicate subscription
@@ -144,7 +145,8 @@
      (get-in db [:ws :ready?])
      {:db (assoc-in db [:subscriptions (name subscription-id)] {:callback callback-event
                                                                 :event [::subscribe event]
-                                                                :active? true})
+                                                                :active? true
+                                                                :legacy? legacy?})
       ::internals/send-ws [(get-in db [:ws :connection])
                            {:id (name subscription-id)
                             :type "start"
@@ -231,4 +233,4 @@
 (defn destroy
   ([] (destroy default-instance-name))
   ([instance-name]
-   (re-frame/dispatch [::destroy instance-name])))
+   (re-frame/dispatch [::destroy {:instance-name instance-name}])))

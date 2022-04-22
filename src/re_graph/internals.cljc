@@ -77,7 +77,8 @@
                  (-> ctx
                      (update-coeffect :event assoc :instance-name instance-name)
                      (cons-interceptor (rfi/path :re-graph instance-name)))
-                 (do (log/error "No re-graph instance found for instance-name" instance-name " - have you initialised re-graph properly?")
+                 (do (log/error "No re-graph instance found for instance-name" instance-name " - have you initialised re-graph properly?"
+                                "Handling event" (get-coeffect ctx :original-event))
                      ctx))))))
 
 (def interceptors
@@ -114,7 +115,8 @@
      {:db       (-> db
                     (update :subscriptions dissoc query-id)
                     (update-in [:http :requests] dissoc query-id))
-      :dispatch (if legacy? ;; enforce legacy behaviour for deprecated api
+      :dispatch (if (and legacy? ;; enforce legacy behaviour for deprecated api
+                         (not= ::callback (first callback-event)))
                   (conj callback-event response)
                   (update callback-event 1 assoc :response response))})))
 
@@ -172,16 +174,20 @@
 (re-frame/reg-event-fx
  ::callback
  [re-frame/unwrap]
- (fn [_ {:keys [callback-fn response]}]
+ (fn [_ {:keys [callback-fn response] :as x}]
    {::call-callback [callback-fn response]}))
 
 (re-frame/reg-event-fx
  ::on-ws-data
  interceptors
- (fn [{:keys [db]} {:keys [id payload]}]
-   (if-let [callback-event (get-in db [:subscriptions (name id) :callback])]
-     {:dispatch (conj callback-event payload)}
-     (log/warn "No callback-event found for subscription" id))))
+ (fn [{:keys [db]} {:keys [id payload] :as msg}]
+   (let [subscription (get-in db [:subscriptions (name id)])]
+     (if-let [callback-event (:callback subscription)]
+       (if (and (:legacy? subscription)
+                (not= ::callback (first callback-event)))
+         {:dispatch (conj callback-event payload)}
+         {:dispatch (update callback-event 1 assoc :response payload)})
+       (log/warn "No callback-event found for subscription" id)))))
 
 (re-frame/reg-event-db
  ::on-ws-complete

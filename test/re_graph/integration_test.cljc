@@ -96,48 +96,44 @@
     (re-graph/init {:ws {:url "ws://localhost:8888/graphql-ws"}
                     :http nil})
 
-    (re-frame/reg-fx
-     ::internals/disconnect-ws
-     (fn [_]
-       (re-frame/dispatch [::ws-disconnected])))
+    (wait-for [::re-graph/init]
 
-    (re-frame/reg-event-fx
-     ::ws-disconnected
-     (fn [& _args]
-       ;; do nothing
-       {}))
+              (re-frame/reg-event-db
+               ::complete
+               (fn [db _]
+                 db))
 
-    (re-frame/reg-event-db
-     ::complete
-     (fn [db _]
-       db))
+              (re-frame/reg-event-fx
+               ::callback
+               [re-frame/unwrap]
+               (fn [{:keys [db]} {:keys [response]}]
+                 (let [new-db (update db ::responses conj response)]
+                   (merge
+                    {:db new-db}
+                    (when (<= 5 (count (::responses new-db)))
+                      {:dispatch [::complete]})))))
 
-    (re-frame/reg-event-fx
-     ::callback
-     (fn [{:keys [db]} [_ response]]
-       (let [new-db (update db ::responses conj response)]
-         (merge
-          {:db new-db}
-          (when (<= 5 (count (::responses new-db)))
-            {:dispatch [::complete]})))))
+              (testing "subscriptions"
+                (re-graph/subscribe {:subscription-id :all-pets
+                                     :query "MyPets($count: Int) { pets(count: $count) { id name } }"
+                                     :variables {:count 5}
+                                     :callback-event #(re-frame/dispatch [::callback {:response %}])})
 
-    (testing "subscriptions"
-      (re-graph/subscribe {:subscription-id :all-pets
-                           :query "MyPets($count: Int) { pets(count: $count) { id name } }"
-                           :variables {:count 5}
-                           :callback-event #(re-frame/dispatch [::callback %])})
+                (wait-for
+                 [::complete]
+                 (let [responses (::responses @rfdb/app-db)]
+                   (is (every? #(= {:data
+                                    {:pets
+                                     [{:id "123", :name "Billy"}
+                                      {:id "234", :name "Bob"}
+                                      {:id "345", :name "Beatrice"}]}}
+                                   %)
+                               responses))
+                   (is (= 5 (count responses)))
 
-      (wait-for
-       [::complete]
-       (let [responses (::responses @rfdb/app-db)]
-         (is (every? #(= {:data
-                          {:pets
-                           [{:id "123", :name "Billy"}
-                            {:id "234", :name "Bob"}
-                            {:id "345", :name "Beatrice"}]}}
-                         %)
-                     responses))
-         (is (= 5 (count responses))))))))
+                   (re-graph/destroy)
+                   (wait-for [::re-graph/destroy]
+                             (println "test complete"))))))))
 
 (deftest websocket-mutation-test
   (run-test-async
@@ -158,7 +154,9 @@
 
    (testing "mutations"
      (testing "async mutate"
-       (re-graph/mutate "mutation { createPet(name: \"Zorro\") { id name } }" {} #(re-frame/dispatch [::callback %]))
+       (re-graph/mutate {:query "mutation { createPet(name: \"Zorro\") { id name } }"
+                         :variables {}
+                         :callback-event  #(re-frame/dispatch [::callback %])})
 
        (wait-for
         [::callback]

@@ -333,3 +333,16 @@ Copyright © 2017 oliyh
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.
+
+
+
+## Todo
+- Update docstrings with map keys
+- Add a spec for the map keys for each fn?
+- Update readme
+- New core test
+- Think about how keys are named
+  - callback-event - should this just be callback?
+  - subscription-id / query-id - should this just be id?
+  - response or payload?
+- Integration test for deprecated core (just copy what it was before)
