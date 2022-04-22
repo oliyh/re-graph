@@ -142,9 +142,9 @@
 
               (go (let [{:keys [status body error-code]} (a/<! response-chan)]
                     (re-frame/dispatch [::http-complete
-                                        (assoc event :reponse (if (= :no-error error-code)
-                                                                body
-                                                                (insert-http-status body status)))]))))
+                                        (assoc event :response (if (= :no-error error-code)
+                                                                 body
+                                                                 (insert-http-status body status)))]))))
 
       :clj (let [future (interop/send-http url
                                            request
