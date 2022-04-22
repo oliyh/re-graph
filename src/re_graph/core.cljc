@@ -136,7 +136,7 @@
 
 (re-frame/reg-event-fx
  ::subscribe
- (cons re-frame/debug interceptors)
+ interceptors
  (fn [{:keys [db]} {:keys [subscription-id query variables callback-event instance-name legacy?] :as event}]
    (cond
      (get-in db [:subscriptions (name subscription-id) :active?])
