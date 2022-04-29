@@ -5,9 +5,6 @@
             [re-graph.logging :as log]
             [clojure.string :as string]))
 
-;; todo update all these to accept maps
-;; dispatchable event should be irrelevant
-;; instance-name and query-id should always be present
 (re-frame/reg-event-fx
  ::mutate
  interceptors
@@ -129,10 +126,8 @@
     (when-let [abort-fn (get-in db [:http :requests query-id :abort])]
       {::internals/call-abort abort-fn}) )))
 
-(defn abort
-  ([query-id] (abort default-instance-name query-id))
-  ([instance-name query-id]
-   (re-frame/dispatch [::abort instance-name query-id])))
+(defn abort [opts]
+   (re-frame/dispatch [::abort opts]))
 
 (re-frame/reg-event-fx
  ::subscribe
@@ -178,10 +173,8 @@
 
      {:db (update-in db [:ws :queue] conj [::unsubscribe event])})))
 
-(defn unsubscribe
-  ([subscription-id] (unsubscribe default-instance-name subscription-id))
-  ([instance-name subscription-id]
-   (re-frame/dispatch [::unsubscribe instance-name subscription-id])))
+(defn unsubscribe [opts]
+  (re-frame/dispatch [::unsubscribe opts]))
 
 (re-frame/reg-event-fx
  ::re-init
@@ -192,10 +185,8 @@
             (when (get-in new-db [:ws :ready?])
               {:dispatch [::internals/connection-init opts]})))))
 
-(defn re-init
-  ([opts] (re-init default-instance-name opts))
-  ([instance-name opts]
-   (re-frame/dispatch [::re-init instance-name opts])))
+(defn re-init [opts]
+  (re-frame/dispatch [::re-init opts]))
 
 (re-frame/reg-event-fx
  ::init
@@ -230,7 +221,5 @@
 (defn init [opts]
   (re-frame/dispatch [::init opts]))
 
-(defn destroy
-  ([] (destroy default-instance-name))
-  ([instance-name]
-   (re-frame/dispatch [::destroy {:instance-name instance-name}])))
+(defn destroy [opts]
+  (re-frame/dispatch [::destroy opts]))

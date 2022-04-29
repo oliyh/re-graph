@@ -106,7 +106,6 @@
       (map? response) (merge response default-errors)
       :else default-errors)))
 
-;; todo update all these to use maps
 (re-frame/reg-event-fx
  ::http-complete
  interceptors
@@ -174,13 +173,13 @@
 (re-frame/reg-event-fx
  ::callback
  [re-frame/unwrap]
- (fn [_ {:keys [callback-fn response] :as x}]
+ (fn [_ {:keys [callback-fn response]}]
    {::call-callback [callback-fn response]}))
 
 (re-frame/reg-event-fx
  ::on-ws-data
  interceptors
- (fn [{:keys [db]} {:keys [id payload] :as msg}]
+ (fn [{:keys [db]} {:keys [id payload]}]
    (let [subscription (get-in db [:subscriptions (name id)])]
      (if-let [callback-event (:callback subscription)]
        (if (and (:legacy? subscription)
@@ -289,7 +288,7 @@
 
 (re-frame/reg-fx
   ::connect-ws
-  (fn [[instance-name {:keys [url sub-protocol #?(:clj impl)] :as opts}]]
+  (fn [[instance-name {:keys [url sub-protocol #?(:clj impl)]}]]
     #?(:cljs (let [ws (cond
                        (nil? sub-protocol)
                        (js/WebSocket. url)
@@ -360,7 +359,6 @@
 
 #?(:clj
    (defn sync-wrapper
-
      "Wraps the given function to allow the GraphQL result to be returned
       synchronously. Will return a GraphQL error response if no response is
       received before the timeout (default 3000ms) expires. Will throw if the

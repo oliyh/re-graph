@@ -340,9 +340,10 @@ your option) any later version.
 - Update docstrings with map keys
 - Add a spec for the map keys for each fn?
 - Update readme
-- New core test
 - Think about how keys are named
   - callback-event - should this just be callback?
   - subscription-id / query-id - should this just be id?
-  - response or payload?
+  - mutation currently takes a query-id and a query, should this be mutation-id and mutation?
+  - response or payload? - or should the map just be the response, and not be wrapped in other stuff?
 - Integration test for deprecated core (just copy what it was before)
+- should subs also have map args?
