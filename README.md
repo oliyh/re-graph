@@ -345,5 +345,4 @@ your option) any later version.
   - subscription-id / query-id - should this just be id?
   - mutation currently takes a query-id and a query, should this be mutation-id and mutation?
   - response or payload? - or should the map just be the response, and not be wrapped in other stuff?
-- Integration test for deprecated core (just copy what it was before)
 - should subs also have map args?
