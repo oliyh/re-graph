@@ -8,6 +8,29 @@
             [re-frame.std-interceptors :as rfi]
             [re-frame.interceptor :refer [->interceptor get-coeffect assoc-coeffect]]))
 
+#?(:clj
+   (defn sync-wrapper
+     "Wraps the given function to allow the GraphQL result to be returned
+      synchronously. Will return a GraphQL error response if no response is
+      received before the timeout (default 3000ms) expires. Will throw if the
+      call returns an exception."
+     [f & args]
+     (let [timeout  (when (int? (last args)) (last args))
+           timeout' (or timeout 3000)
+           p        (promise)
+           callback (fn [result] (deliver p result))
+           args'    (conj (vec (if timeout (butlast args) args))
+                          callback)]
+       (apply f args')
+
+       ;; explicit timeout to avoid unreliable aborts from underlying implementations
+       (let [result (deref p timeout' ::timeout)]
+         (if (= ::timeout result)
+           {:errors [{:message "re-graph did not receive response from server"
+                      :timeout timeout'
+                      :args args}]}
+           result)))))
+
 (defn- ensure-query-id [event-name trimmed-event]
   (if (contains? #{::query ::mutate} event-name)
     (if (= 3 (count trimmed-event)) ;; query, variables, callback-event
@@ -82,7 +105,7 @@
              The `instance-name` and `timeout` are optional. The `timeout` is
              specified in milliseconds."}
      mutate-sync
-     (partial internals/sync-wrapper mutate)))
+     (partial sync-wrapper mutate)))
 
 (re-frame/reg-event-fx
  ::query
@@ -116,7 +139,7 @@
              The `instance-name` and `timeout` are optional. The `timeout` is
              specified in milliseconds."}
      query-sync
-     (partial internals/sync-wrapper query)))
+     (partial sync-wrapper query)))
 
 (re-frame/reg-event-fx
  ::abort
