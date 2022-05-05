@@ -241,7 +241,7 @@ When using re-graph within a browser, site cookies are shared between HTTP and W
 
 When using re-graph with Clojure, however, some configuration is necessary to ensure that the same cookie store is used for both HTTP and WebSocket connections.
 
-Before initializing re-graph, create a common HTTP client.
+Before initialising re-graph, create a common HTTP client.
 
 ```
 (ns user
@@ -254,7 +254,7 @@ Before initializing re-graph, create a common HTTP client.
 
 See the [hato documentation](https://github.com/gnarroway/hato) for all the supported configuration options.
 
-When initializing re-graph, configure both the HTTP and WebSocket connections with this client:
+When initialising re-graph, configure both the HTTP and WebSocket connections with this client:
 
 ```
 (re-graph/init {:http {:impl {:http-client http-client}}

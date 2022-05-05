@@ -45,7 +45,8 @@
         on-ws-message (on-ws-message (or instance-id default-instance-id))]
     (run-test-sync
      (install-websocket-stub!)
-     (init instance-id {:ws {:url "ws://socket.rocket"}})
+     (init instance-id {:ws {:url "ws://socket.rocket"
+                             :connection-init-payload nil}})
 
      (let [expected-subscription-payload {:id "my-sub"
                                           :type "start"
@@ -292,7 +293,8 @@
       (run-test-sync
        (install-websocket-stub!)
 
-       (init instance-id {:ws {:url "ws://socket.rocket"}})
+       (init instance-id {:ws {:url "ws://socket.rocket"
+                               :connection-init-payload nil}})
 
        (let [expected-query-payload {:id "random-id"
                                      :type "start"
@@ -345,6 +347,7 @@
    (install-websocket-stub!)
 
    (re-frame/dispatch [::re-graph/init {:ws {:url "ws://socket.rocket"
+                                             :connection-init-payload nil
                                              :supported-operations #{:subscribe}}
                                         :http {:url "http://foo.bar/graph-ql"}}])
 
@@ -683,7 +686,8 @@
         (run-test-sync
          (install-websocket-stub!)
 
-         (init {:ws {:url "ws://socket.rocket"}})
+         (init {:ws {:url "ws://socket.rocket"
+                     :connection-init-payload nil}})
          (let [expected-subscription-payload {:id "my-sub"
                                               :type "start"
                                               :payload {:query "subscription { things { id } }"
@@ -840,8 +844,10 @@
     (fn [[instance-id _options]]
       ((on-open instance-id (keyword (str (name instance-id) "-connection"))))))
 
-   (init :service-a {:ws {:url "ws://socket.rocket"}})
-   (init :service-b {:ws {:url "ws://socket.rocket"}})
+   (init :service-a {:ws {:url "ws://socket.rocket"
+                          :connection-init-payload nil}})
+   (init :service-b {:ws {:url "ws://socket.rocket"
+                          :connection-init-payload nil}})
 
    (let [expected-subscription-payload-a {:id "a-sub"
                                           :type "start"

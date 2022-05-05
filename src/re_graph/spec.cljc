@@ -46,7 +46,7 @@
 (s/def ::sub-protocol string?)
 (s/def ::reconnect-timeout int?)
 (s/def ::resume-subscriptions? boolean?)
-(s/def ::connection-init-payload map?)
+(s/def ::connection-init-payload (s/nilable map?))
 (s/def ::supported-operations (s/coll-of #{:query :mutate :subscribe} :kind set? :distinct true :into #{}))
 (s/def ::impl (s/or :map map? :fn fn?))
 

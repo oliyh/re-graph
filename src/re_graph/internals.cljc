@@ -336,6 +336,7 @@
    :sub-protocol "graphql-ws"
    :reconnect-timeout 5000
    :resume-subscriptions? true
+   :connection-init-payload {}
    :impl {}
    :supported-operations #{:subscribe :mutate :query}})
 
