@@ -5,7 +5,7 @@
             [re-graph.logging :as log]
             [re-frame.interop :refer [empty-queue]]
             [clojure.spec.alpha :as s]
-            #?(:clj [re-graph.spec :as spec])
+            [re-graph.spec :as spec]
             #?@(:cljs [[cljs-http.client :as http]
                        [cljs-http.core :as http-core]]
                 :clj  [[re-graph.interop :as interop]])
