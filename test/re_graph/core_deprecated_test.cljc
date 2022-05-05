@@ -8,9 +8,14 @@
              :refer-macros [run-test-sync run-test-async wait-for]]
             [clojure.test :refer [deftest is testing]
              :refer-macros [deftest is testing]]
+            [clojure.spec.alpha :as s]
+            [clojure.spec.test.alpha :as stest]
             #?@(:clj [[cheshire.core :as json]
                       [hato.client :as hato]
                       [clj-http.client :as clj-http]])))
+
+(stest/instrument)
+(s/check-asserts true)
 
 (def on-ws-message @#'internals/on-ws-message)
 (def on-open @#'internals/on-open)

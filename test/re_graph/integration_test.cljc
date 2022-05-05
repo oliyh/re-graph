@@ -6,7 +6,12 @@
             [day8.re-frame.test :refer [run-test-async wait-for #?(:clj with-temp-re-frame-state)]]
             [re-frame.core :as re-frame]
             [re-frame.db :as rfdb]
+            [clojure.spec.alpha :as s]
+            [clojure.spec.test.alpha :as stest]
             #?(:clj [re-graph.integration-server :refer [with-server]])))
+
+(stest/instrument)
+(s/check-asserts true)
 
 #?(:clj (use-fixtures :once with-server))
 
@@ -25,7 +30,7 @@
    (testing "async query"
      (re-graph/query {:query "{ pets { id name } }"
                       :variables {}
-                      :callback-event #(re-frame/dispatch [::callback %])})
+                      :callback #(re-frame/dispatch [::callback %])})
 
      (wait-for
       [::callback]
@@ -54,7 +59,7 @@
     (testing "async mutate"
       (re-graph/mutate {:query "mutation { createPet(name: \"Zorro\") { id name } }"
                         :variables {}
-                        :callback-event #(re-frame/dispatch [::callback %])})
+                        :callback #(re-frame/dispatch [::callback %])})
 
       (wait-for
        [::callback]
@@ -114,10 +119,10 @@
                       {:dispatch [::complete]})))))
 
               (testing "subscriptions"
-                (re-graph/subscribe {:subscription-id :all-pets
+                (re-graph/subscribe {:id :all-pets
                                      :query "MyPets($count: Int) { pets(count: $count) { id name } }"
                                      :variables {:count 5}
-                                     :callback-event #(re-frame/dispatch [::callback {:response %}])})
+                                     :callback #(re-frame/dispatch [::callback {:response %}])})
 
                 (wait-for
                  [::complete]
@@ -158,7 +163,7 @@
                (testing "async mutate"
                  (re-graph/mutate {:query "mutation { createPet(name: \"Zorro\") { id name } }"
                                    :variables {}
-                                   :callback-event  #(re-frame/dispatch [::callback %])})
+                                   :callback #(re-frame/dispatch [::callback %])})
 
                  (wait-for
                   [::callback]

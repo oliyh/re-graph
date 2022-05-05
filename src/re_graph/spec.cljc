@@ -59,9 +59,10 @@
                               ::supported-operations
                               ::impl])))
 
-(s/def ::http (s/keys :opt-un [::url
-                               ::supported-operations
-                               ::impl]))
+(s/def ::http (s/nilable
+               (s/keys :opt-un [::url
+                                ::supported-operations
+                                ::impl])))
 
 (s/def ::init (s/keys :opt-un [::ws
                                ::http
