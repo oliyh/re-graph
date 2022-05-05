@@ -69,26 +69,26 @@ Call the `init` function to bootstrap it and then use `subscribe`, `unsubscribe`
 ;; initialise re-graph, possibly including configuration options (see below)
 (re-graph/init {})
 
-(defn on-thing [{:keys [data errors] :as payload}]
+(defn on-thing [{:keys [data errors] :as response}]
   ;; do things with data
 ))
 
 ;; start a subscription, with responses sent to the callback-fn provided
-(re-graph/subscribe :my-subscription-id  ;; this id should uniquely identify this subscription
-                    "{ things { id } }"  ;; your graphql query
-                    {:some "variable"}   ;; arguments map
-                    on-thing)            ;; callback-fn when messages are recieved
+(re-graph/subscribe {:id        :my-subscription-id  ;; this id should uniquely identify this subscription
+                     :query     "{ things { id } }"  ;; your graphql query
+                     :variables {:some "variable"}   ;; arguments map
+                     :callback  on-thing})           ;; callback-fn when messages are recieved
 
 ;; stop the subscription
-(re-graph/unsubscribe :my-subscription-id)
+(re-graph/unsubscribe {:id :my-subscription-id})
 
 ;; perform a query, with the response sent to the callback event provided
-(re-graph/query "{ things { id } }"  ;; your graphql query
-                 {:some "variable"}  ;; arguments map
-                 on-thing)           ;; callback event when response is recieved
+(re-graph/query {:query     "{ things { id } }" ;; your graphql query
+                 :variables {:some "variable"}  ;; arguments map
+                 :callback  on-thing})          ;; callback event when response is recieved
 
 ;; shut re-graph down when finished
-(re-graph/destroy)
+(re-graph/destroy {})
 ```
 
 ### re-frame users
@@ -103,29 +103,31 @@ Dispatch the `init` event to bootstrap it and then use the `:subscribe`, `:unsub
 
 (re-frame/reg-event-db
   ::on-thing
-  (fn [db [_ {:keys [data errors] :as payload}]]
-    ;; do things with data e.g. write it into the re-frame database
-    ))
+  [re-frame/unwrap]
+  (fn [db {:keys [response]}]
+    (let [{:keys [data errors]} response]
+      ;; do things with data e.g. write it into the re-frame database
+    )))
 
 ;; start a subscription, with responses sent to the callback event provided
 (re-frame/dispatch [::re-graph/subscribe
-                    :my-subscription-id  ;; this id should uniquely identify this subscription
-                    "{ things { id } }"  ;; your graphql query
-                    {:some "variable"}   ;; arguments map
-                    [::on-thing]])       ;; callback event when messages are recieved
+                    {:id        :my-subscription-id  ;; this id should uniquely identify this subscription
+                     :query     "{ things { id } }"  ;; your graphql query
+                     :variables {:some "variable"}   ;; arguments map
+                     :callback  [::on-thing]}])      ;; callback event when messages are recieved
 
 ;; stop the subscription
-(re-frame/dispatch [::re-graph/unsubscribe :my-subscription-id])
+(re-frame/dispatch [::re-graph/unsubscribe {:id :my-subscription-id}])
 
 ;; perform a query, with the response sent to the callback event provided
 (re-frame/dispatch [::re-graph/query
-                    :my-query-id         ;; unique id for this query
-                    "{ things { id } }"  ;; your graphql query
-                    {:some "variable"}   ;; arguments map
-                    [::on-thing]])       ;; callback event when response is recieved
+                    {:id        :my-query-id         ;; unique id for this query
+                     :query     "{ things { id } }"  ;; your graphql query
+                     :variables {:some "variable"}   ;; arguments map
+                     :callback  [::on-thing]}])      ;; callback event when response is recieved
 
 ;; shut re-graph down when finished
-(re-frame/dispatch [::re-graph/destroy])
+(re-frame/dispatch [::re-graph/destroy {}])
 ```
 
 ### Options
@@ -135,23 +137,23 @@ Options can be passed to the init event, with the following possibilities:
 ```clojure
 (re-frame/dispatch
   [::re-graph/init
-    {:ws {:url                     "wss://foo.io/graphql-ws" ;; override the websocket url (defaults to /graphql-ws, nil to disable)
-          :sub-protocol            "graphql-ws"              ;; override the websocket sub-protocol (defaults to "graphql-ws")
-          :reconnect-timeout       5000                      ;; attempt reconnect n milliseconds after disconnect (defaults to 5000, nil to disable)
-          :resume-subscriptions?   true                      ;; start existing subscriptions again when websocket is reconnected after a disconnect (defaults to true)
-          :connection-init-payload {}                        ;; the payload to send in the connection_init message, sent when a websocket connection is made (defaults to {})
-          :impl                    {}                        ;; implementation-specific options (see hato for options, defaults to {}, may be a literal or a function that returns the options)
-          :supported-operations    #{:subscribe              ;; declare the operations supported via websocket, defaults to all three
-                                     :query                  ;;   if queries/mutations must be done via http set this to #{:subscribe} only
-                                     :mutate}
-         }
-
-     :http {:url    "http://bar.io/graphql"   ;; override the http url (defaults to /graphql)
-            :impl   {}                        ;; implementation-specific options (see clj-http or hato for options, defaults to {}, may be a literal or a function that returns the options)
-            :supported-operations #{:query    ;; declare the operations supported via http, defaults to :query and :mutate
+   {:ws {:url                     "wss://foo.io/graphql-ws" ;; override the websocket url (defaults to /graphql-ws, nil to disable)
+         :sub-protocol            "graphql-ws"              ;; override the websocket sub-protocol (defaults to "graphql-ws")
+         :reconnect-timeout       5000                      ;; attempt reconnect n milliseconds after disconnect (defaults to 5000, nil to disable)
+         :resume-subscriptions?   true                      ;; start existing subscriptions again when websocket is reconnected after a disconnect (defaults to true)
+         :connection-init-payload {}                        ;; the payload to send in the connection_init message, sent when a websocket connection is made (defaults to {})
+         :impl                    {}                        ;; implementation-specific options (see hato for options, defaults to {}, may be a literal or a function that returns the options)
+         :supported-operations    #{:subscribe              ;; declare the operations supported via websocket, defaults to all three
+                                    :query                  ;;   if queries/mutations must be done via http set this to #{:subscribe} only
                                     :mutate}
-           }
-  }])
+        }
+
+    :http {:url    "http://bar.io/graphql"   ;; override the http url (defaults to /graphql)
+           :impl   {}                        ;; implementation-specific options (see clj-http or hato for options, defaults to {}, may be a literal or a function that returns the options)
+           :supported-operations #{:query    ;; declare the operations supported via http, defaults to :query and :mutate
+                                   :mutate}
+          }
+   }])
 ```
 
 Either `:ws` or `:http` can be set to nil to disable the WebSocket or HTTP protocols.
@@ -337,7 +339,6 @@ your option) any later version.
 
 
 ## Todo
-- Update readme
-- Think about how keys are named
-  - response or payload? - or should the map just be the response, and not be wrapped in other stuff?
+- Update readme (got up to 'multiple instances'
 - should subs also have map args?
+- release notes describing upgrade, and point out deprecated ns
