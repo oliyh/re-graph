@@ -1,7 +1,7 @@
 (ns re-graph.core-deprecated-test
   (:require [re-graph.core-deprecated :as re-graph]
             [re-graph.core :as re-graph-core]
-            [re-graph.internals :as internals :refer [default-instance-name]]
+            [re-graph.internals :as internals :refer [default-instance-id]]
             [re-frame.core :as re-frame]
             [re-frame.db :refer [app-db]]
             [day8.re-frame.test :refer [run-test-sync run-test-async wait-for]
@@ -24,30 +24,29 @@
 (defn- install-websocket-stub! []
   (re-frame/reg-fx
    ::internals/connect-ws
-   (fn [[instance-name _options]]
-     ((on-open instance-name ::websocket-connection)))))
+   (fn [[instance-id _options]]
+     ((on-open instance-id ::websocket-connection)))))
 
-(defn- prepend-instance-name [instance-name [event-name & args :as event]]
-  (if instance-name
-    (into [event-name instance-name] args)
+(defn- prepend-instance-id [instance-id [event-name & args :as event]]
+  (if instance-id
+    (into [event-name instance-id] args)
     event))
 
-(defn- dispatch-to-instance [instance-name event]
-  (re-frame/dispatch (prepend-instance-name instance-name event)))
+(defn- dispatch-to-instance [instance-id event]
+  (re-frame/dispatch (prepend-instance-id instance-id event)))
 
-(defn- init [instance-name opts]
-  (if (nil? instance-name)
+(defn- init [instance-id opts]
+  (if (nil? instance-id)
     (re-frame/dispatch [::re-graph/init opts])
-    (re-frame/dispatch [::re-graph/init instance-name opts])))
+    (re-frame/dispatch [::re-graph/init instance-id opts])))
 
-(defn- run-subscription-test [instance-name]
-  (let [dispatch (partial dispatch-to-instance instance-name)
-        db-instance #(get-in @app-db [:re-graph (or instance-name default-instance-name)])
-        on-ws-message (on-ws-message (or instance-name default-instance-name))]
+(defn- run-subscription-test [instance-id]
+  (let [dispatch (partial dispatch-to-instance instance-id)
+        db-instance #(get-in @app-db [:re-graph (or instance-id default-instance-id)])
+        on-ws-message (on-ws-message (or instance-id default-instance-id))]
     (run-test-sync
      (install-websocket-stub!)
-     (init instance-name {:ws {:url "ws://socket.rocket"
-                               :connection-init-payload nil}})
+     (init instance-id {:ws {:url "ws://socket.rocket"}})
 
      (let [expected-subscription-payload {:id "my-sub"
                                           :type "start"
@@ -126,10 +125,10 @@
 (deftest named-subscription-test
   (run-subscription-test :service-a))
 
-(defn- run-websocket-lifecycle-test [instance-name]
-  (let [dispatch (partial dispatch-to-instance instance-name)
-        db-instance #(get-in @app-db [:re-graph (or instance-name default-instance-name)])
-        on-open (partial on-open (or instance-name default-instance-name))]
+(defn- run-websocket-lifecycle-test [instance-id]
+  (let [dispatch (partial dispatch-to-instance instance-id)
+        db-instance #(get-in @app-db [:re-graph (or instance-id default-instance-id)])
+        on-open (partial on-open (or instance-id default-instance-id))]
     (run-test-sync
 
      (re-frame/reg-fx
@@ -142,8 +141,8 @@
                                           :payload {:query "subscription { things { id } }"
                                                     :variables {:some "variable"}}}]
 
-       (init instance-name {:ws {:url                     "ws://socket.rocket"
-                                 :connection-init-payload init-payload}})
+       (init instance-id {:ws {:url                     "ws://socket.rocket"
+                               :connection-init-payload init-payload}})
 
        (testing "messages are queued when websocket isn't ready"
 
@@ -207,10 +206,10 @@
 (deftest named-websocket-lifecycle-test
   (run-websocket-lifecycle-test :service-a))
 
-(defn- run-websocket-reconnection-test [instance-name]
-  (let [dispatch (partial dispatch-to-instance instance-name)
-        db-instance #(get-in @app-db [:re-graph (or instance-name default-instance-name)])
-        on-close (on-close (or instance-name default-instance-name))
+(defn- run-websocket-reconnection-test [instance-id]
+  (let [dispatch (partial dispatch-to-instance instance-id)
+        db-instance #(get-in @app-db [:re-graph (or instance-id default-instance-id)])
+        on-close (on-close (or instance-id default-instance-id))
         sent-msgs (atom [])]
     (run-test-async
      (install-websocket-stub!)
@@ -234,20 +233,20 @@
         (swap! sent-msgs conj payload)))
 
      (testing "websocket reconnects when disconnected"
-       (init instance-name {:ws {:url                     "ws://socket.rocket"
-                                 :connection-init-payload {:token "abc"}
-                                 :reconnect-timeout       0}})
+       (init instance-id {:ws {:url                     "ws://socket.rocket"
+                               :connection-init-payload {:token "abc"}
+                               :reconnect-timeout       0}})
 
-       (let [{:keys [subscription-id
+       (let [{:keys [id
                      query
                      variables
-                     callback-event]
+                     callback]
               :as subscription-params}
-             {:instance-name (or instance-name default-instance-name)
-              :subscription-id :my-sub
+             {:instance-id (or instance-id default-instance-id)
+              :id :my-sub
               :query "{ things { id } }"
               :variables {:some "variable"}
-              :callback-event [::on-thing]
+              :callback [::on-thing]
               :legacy? true}]
 
 
@@ -256,7 +255,7 @@
           (is (get-in (db-instance) [:ws :ready?]))
 
           ;; create a subscription and wait for it to be sent
-          (dispatch [::re-graph/subscribe subscription-id query variables callback-event])
+          (dispatch [::re-graph/subscribe id query variables callback])
           (wait-for [::re-graph-core/subscribe]
                     (on-close)
                     (wait-for
@@ -279,18 +278,17 @@
 (deftest named-websocket-reconnection-test
   (run-websocket-reconnection-test :service-a))
 
-(defn- run-websocket-query-test [instance-name]
-  (let [dispatch (partial dispatch-to-instance instance-name)
-        db-instance #(get-in @app-db [:re-graph (or instance-name default-instance-name)])
-        on-ws-message (on-ws-message (or instance-name default-instance-name))]
-    (with-redefs [internals/generate-query-id (constantly "random-query-id")]
+(defn- run-websocket-query-test [instance-id]
+  (let [dispatch (partial dispatch-to-instance instance-id)
+        db-instance #(get-in @app-db [:re-graph (or instance-id default-instance-id)])
+        on-ws-message (on-ws-message (or instance-id default-instance-id))]
+    (with-redefs [internals/generate-id (constantly "random-id")]
       (run-test-sync
        (install-websocket-stub!)
 
-       (init instance-name {:ws {:url "ws://socket.rocket"
-                                 :connection-init-payload nil}})
+       (init instance-id {:ws {:url "ws://socket.rocket"}})
 
-       (let [expected-query-payload {:id "random-query-id"
+       (let [expected-query-payload {:id "random-id"
                                      :type "start"
                                      :payload {:query "query { things { id } }"
                                                :variables {:some "variable"}}}
@@ -322,10 +320,10 @@
                     (::thing @app-db))))
 
            (on-ws-message (data->message {:type "complete"
-                                          :id "random-query-id"}))
+                                          :id "random-id"}))
 
            (testing "the callback is removed afterwards"
-             (is (nil? (get-in (db-instance) [:subscriptions "random-query-id"]))))))))))
+             (is (nil? (get-in (db-instance) [:subscriptions "random-id"]))))))))))
 
 (deftest websocket-query-test
   (run-websocket-query-test nil))
@@ -338,7 +336,6 @@
    (install-websocket-stub!)
 
    (re-frame/dispatch [::re-graph/init {:ws {:url "ws://socket.rocket"
-                                             :connection-init-payload nil
                                              :supported-operations #{:subscribe}}
                                         :http {:url "http://foo.bar/graph-ql"}}])
 
@@ -356,12 +353,12 @@
 (defn- dispatch-response [event payload]
   (re-frame/dispatch [::internals/http-complete (assoc event :response payload)]))
 
-(defn- run-http-query-test [instance-name]
-  (let [dispatch (partial dispatch-to-instance instance-name)]
+(defn- run-http-query-test [instance-id]
+  (let [dispatch (partial dispatch-to-instance instance-id)]
     (run-test-sync
      (let [expected-http-url "http://foo.bar/graph-ql"]
-       (init instance-name {:http {:url expected-http-url}
-                            :ws   nil})
+       (init instance-id {:http {:url expected-http-url}
+                          :ws   nil})
 
        (let [expected-query-payload {:query "query { things { id } }"
                                      :variables {:some "variable"}}
@@ -395,7 +392,7 @@
              (re-frame/reg-fx
               ::internals/send-http
               (fn [{:keys [event]}]
-                (is (= id (:query-id event)))))
+                (is (= id (:id event)))))
 
              (dispatch [::re-graph/query id "{ things { id } }" {:some "variable"} [::on-thing]])
 
@@ -412,14 +409,14 @@
 (deftest named-http-query-test
   (run-http-query-test :service-a))
 
-(defn- run-http-query-error-test [instance-name]
-  (let [dispatch (partial dispatch-to-instance instance-name)]
+(defn- run-http-query-error-test [instance-id]
+  (let [dispatch (partial dispatch-to-instance instance-id)]
     (run-test-sync
      (let [mock-response (atom {})
            query "{ things { id } }"
            variables {:some "variable"}]
-       (init instance-name {:http {:url "http://foo.bar/graph-ql"}
-                            :ws   nil})
+       (init instance-id {:http {:url "http://foo.bar/graph-ql"}
+                          :ws   nil})
 
        (re-frame/reg-fx
         ::internals/send-http
@@ -507,8 +504,8 @@
 
 #?(:clj
    (deftest clj-http-query-error-test
-     (let [instance-name nil
-           dispatch (partial dispatch-to-instance instance-name)]
+     (let [instance-id nil
+           dispatch (partial dispatch-to-instance instance-id)]
        (run-test-sync
         (let [query                "{ things { id } }"
               variables            {:some "variable"}
@@ -516,8 +513,8 @@
               http-server-response (fn [_url & [_opts respond _raise]]
                                      (respond {:status 400, :body {:errors [{:message "OK"
                                                                              :extensions {:status 404}}]}}))]
-          (init instance-name {:http {:url http-url}
-                               :ws   nil})
+          (init instance-id {:http {:url http-url}
+                             :ws   nil})
 
           (re-frame/reg-event-db
            ::on-thing
@@ -539,12 +536,12 @@
 (deftest named-http-query-error-test
   (run-http-query-error-test :service-a))
 
-(defn- run-http-mutation-test [instance-name]
-  (let [dispatch (partial dispatch-to-instance instance-name)]
+(defn- run-http-mutation-test [instance-id]
+  (let [dispatch (partial dispatch-to-instance instance-id)]
     (run-test-sync
      (let [expected-http-url "http://foo.bar/graph-ql"]
-       (init instance-name {:http {:url expected-http-url}
-                            :ws   nil})
+       (init instance-id {:http {:url expected-http-url}
+                          :ws   nil})
 
        (let [mutation (str "signin($login:String!,$password:String!){"
                            "signin(login:$login,password:$password){id}}")
@@ -578,7 +575,7 @@
              (re-frame/reg-fx
               ::internals/send-http
               (fn [{:keys [event]}]
-                (is (= id (:query-id event)))))
+                (is (= id (:id event)))))
 
              (dispatch [::re-graph/mutate id mutation params [::on-thing]])
 
@@ -595,14 +592,14 @@
 (deftest named-http-mutation-test
   (run-http-mutation-test :service-a))
 
-(defn- run-http-parameters-test [instance-name]
-  (let [dispatch (partial dispatch-to-instance instance-name)]
+(defn- run-http-parameters-test [instance-id]
+  (let [dispatch (partial dispatch-to-instance instance-id)]
     (run-test-sync
      (let [expected-http-url "http://foo.bar/graph-ql"
            expected-request {:with-credentials? false}]
-       (init instance-name {:http {:url  expected-http-url
-                                   :impl (constantly expected-request)}
-                            :ws   nil})
+       (init instance-id {:http {:url  expected-http-url
+                                 :impl (constantly expected-request)}
+                          :ws   nil})
        (testing "Request can be specified"
          (re-frame/reg-fx
           ::internals/send-http
@@ -618,14 +615,14 @@
 (deftest named-http-parameters-test
   (run-http-parameters-test :service-a))
 
-(defn- run-non-re-frame-test [instance-name]
-  (let [db-instance #(get-in @app-db [:re-graph (or instance-name default-instance-name)])
-        on-ws-message (on-ws-message (or instance-name default-instance-name))
-        init (if instance-name (partial re-graph/init instance-name) re-graph/init)
-        subscribe (if instance-name (partial re-graph/subscribe instance-name) re-graph/subscribe)
-        unsubscribe (if instance-name (partial re-graph/unsubscribe instance-name) re-graph/unsubscribe)
-        query (if instance-name (partial re-graph/query instance-name) re-graph/query)
-        mutate (if instance-name (partial re-graph/mutate instance-name) re-graph/mutate)]
+(defn- run-non-re-frame-test [instance-id]
+  (let [db-instance #(get-in @app-db [:re-graph (or instance-id default-instance-id)])
+        on-ws-message (on-ws-message (or instance-id default-instance-id))
+        init (if instance-id (partial re-graph/init instance-id) re-graph/init)
+        subscribe (if instance-id (partial re-graph/subscribe instance-id) re-graph/subscribe)
+        unsubscribe (if instance-id (partial re-graph/unsubscribe instance-id) re-graph/unsubscribe)
+        query (if instance-id (partial re-graph/query instance-id) re-graph/query)
+        mutate (if instance-id (partial re-graph/mutate instance-id) re-graph/mutate)]
 
     (testing "can call normal functions instead of needing re-frame"
 
@@ -633,8 +630,7 @@
         (run-test-sync
          (install-websocket-stub!)
 
-         (init {:ws {:url "ws://socket.rocket"
-                     :connection-init-payload nil}})
+         (init {:ws {:url "ws://socket.rocket"}})
          (let [expected-subscription-payload {:id "my-sub"
                                               :type "start"
                                               :payload {:query "subscription { things { id } }"
@@ -778,13 +774,11 @@
 
    (re-frame/reg-fx
     ::internals/connect-ws
-    (fn [[instance-name _options]]
-      ((on-open instance-name (keyword (str (name instance-name) "-connection"))))))
+    (fn [[instance-id _options]]
+      ((on-open instance-id (keyword (str (name instance-id) "-connection"))))))
 
-   (init :service-a {:ws {:url                     "ws://socket.rocket"
-                          :connection-init-payload nil}})
-   (init :service-b {:ws {:url "ws://socket.rocket"
-                          :connection-init-payload nil}})
+   (init :service-a {:ws {:url "ws://socket.rocket"}})
+   (init :service-b {:ws {:url "ws://socket.rocket"}})
 
    (let [expected-subscription-payload-a {:id "a-sub"
                                           :type "start"
@@ -800,80 +794,80 @@
          expected-unsubscription-payload-b {:id "b-sub"
                                             :type "stop"}]
 
-       (testing "Subscriptions can be registered"
+     (testing "Subscriptions can be registered"
 
+       (re-frame/reg-fx
+        ::internals/send-ws
+        (fn [[ws payload]]
+          (condp = ws
+            :service-a-connection
+            (is (= expected-subscription-payload-a payload))
+
+            :service-b-connection
+            (is (= expected-subscription-payload-b payload)))))
+
+       (re-frame/dispatch [::re-graph/subscribe :service-a :a-sub "{ things { a } }" {:some "a"} [::on-a-thing]])
+       (re-frame/dispatch [::re-graph/subscribe :service-b :b-sub "{ things { b } }" {:some "b"} [::on-b-thing]])
+
+       (is (= [::on-a-thing]
+              (get-in @app-db [:re-graph :service-a :subscriptions "a-sub" :callback])))
+
+       (is (= [::on-b-thing]
+              (get-in @app-db [:re-graph :service-b :subscriptions "b-sub" :callback])))
+
+       (testing "and deduplicated"
+         (re-frame/reg-fx
+          ::internals/send-ws
+          (fn [_]
+            (is false "Should not have sent a websocket message for an existing subscription")))
+
+         (re-frame/dispatch [::re-graph/subscribe :service-a :a-sub "{ things { a } }" {:some "a"} [::on-a-thing]])
+         (re-frame/dispatch [::re-graph/subscribe :service-b :b-sub "{ things { b } }" {:some "b"} [::on-b-thing]]))
+
+       (testing "messages from the WS are sent to the callback"
+
+         (let [expected-response-payload-a {:data {:things [{:a 1} {:a 2}]}}
+               expected-response-payload-b {:data {:things [{:b 1}]}}]
+           (re-frame/reg-event-db
+            ::on-a-thing
+            (fn [db [_ payload]]
+              (assoc db ::a-thing payload)))
+
+           (re-frame/reg-event-db
+            ::on-b-thing
+            (fn [db [_ payload]]
+              (assoc db ::b-thing payload)))
+
+           ((on-ws-message :service-a) (data->message {:type "data"
+                                                       :id "a-sub"
+                                                       :payload expected-response-payload-a}))
+
+           ((on-ws-message :service-b) (data->message {:type "data"
+                                                       :id "b-sub"
+                                                       :payload expected-response-payload-b}))
+
+           (is (= expected-response-payload-a
+                  (::a-thing @app-db)))
+
+           (is (= expected-response-payload-b
+                  (::b-thing @app-db)))))
+
+       (testing "and unregistered"
          (re-frame/reg-fx
           ::internals/send-ws
           (fn [[ws payload]]
             (condp = ws
               :service-a-connection
-              (is (= expected-subscription-payload-a payload))
+              (is (= expected-unsubscription-payload-a payload))
 
               :service-b-connection
-              (is (= expected-subscription-payload-b payload)))))
+              (is (= expected-unsubscription-payload-b payload)))))
 
-         (re-frame/dispatch [::re-graph/subscribe :service-a :a-sub "{ things { a } }" {:some "a"} [::on-a-thing]])
-         (re-frame/dispatch [::re-graph/subscribe :service-b :b-sub "{ things { b } }" {:some "b"} [::on-b-thing]])
+         (re-frame/dispatch [::re-graph/unsubscribe :service-a :a-sub])
+         (re-frame/dispatch [::re-graph/unsubscribe :service-b :b-sub])
 
-         (is (= [::on-a-thing]
-                (get-in @app-db [:re-graph :service-a :subscriptions "a-sub" :callback])))
-
-         (is (= [::on-b-thing]
-                (get-in @app-db [:re-graph :service-b :subscriptions "b-sub" :callback])))
-
-         (testing "and deduplicated"
-           (re-frame/reg-fx
-            ::internals/send-ws
-            (fn [_]
-              (is false "Should not have sent a websocket message for an existing subscription")))
-
-           (re-frame/dispatch [::re-graph/subscribe :service-a :a-sub "{ things { a } }" {:some "a"} [::on-a-thing]])
-           (re-frame/dispatch [::re-graph/subscribe :service-b :b-sub "{ things { b } }" {:some "b"} [::on-b-thing]]))
-
-         (testing "messages from the WS are sent to the callback"
-
-           (let [expected-response-payload-a {:data {:things [{:a 1} {:a 2}]}}
-                 expected-response-payload-b {:data {:things [{:b 1}]}}]
-             (re-frame/reg-event-db
-              ::on-a-thing
-              (fn [db [_ payload]]
-                (assoc db ::a-thing payload)))
-
-             (re-frame/reg-event-db
-              ::on-b-thing
-              (fn [db [_ payload]]
-                (assoc db ::b-thing payload)))
-
-             ((on-ws-message :service-a) (data->message {:type "data"
-                                                         :id "a-sub"
-                                                         :payload expected-response-payload-a}))
-
-             ((on-ws-message :service-b) (data->message {:type "data"
-                                                         :id "b-sub"
-                                                         :payload expected-response-payload-b}))
-
-             (is (= expected-response-payload-a
-                    (::a-thing @app-db)))
-
-             (is (= expected-response-payload-b
-                    (::b-thing @app-db)))))
-
-         (testing "and unregistered"
-           (re-frame/reg-fx
-            ::internals/send-ws
-            (fn [[ws payload]]
-              (condp = ws
-                :service-a-connection
-                (is (= expected-unsubscription-payload-a payload))
-
-                :service-b-connection
-                (is (= expected-unsubscription-payload-b payload)))))
-
-           (re-frame/dispatch [::re-graph/unsubscribe :service-a :a-sub])
-           (re-frame/dispatch [::re-graph/unsubscribe :service-b :b-sub])
-
-           (is (nil? (get-in @app-db [:re-graph :service-a :subscriptions "a-sub"])))
-           (is (nil? (get-in @app-db [:re-graph :service-b :subscriptions "b-sub"]))))))))
+         (is (nil? (get-in @app-db [:re-graph :service-a :subscriptions "a-sub"])))
+         (is (nil? (get-in @app-db [:re-graph :service-b :subscriptions "b-sub"]))))))))
 
 
 (deftest reinit-ws-test []

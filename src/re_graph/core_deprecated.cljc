@@ -2,7 +2,7 @@
   "DEPRECATED: Use re-graph.core"
   (:require [re-frame.core :as re-frame]
             [re-graph.internals :as internals
-             :refer [default-instance-name]]
+             :refer [default-instance-id]]
             [re-graph.core :as core]
             [re-graph.logging :as log]
             [re-frame.std-interceptors :as rfi]
@@ -31,10 +31,10 @@
                       :args args}]}
            result)))))
 
-(defn- ensure-query-id [event-name trimmed-event]
+(defn- ensure-id [event-name trimmed-event]
   (if (contains? #{::query ::mutate} event-name)
-    (if (= 3 (count trimmed-event)) ;; query, variables, callback-event
-      (vec (cons (internals/generate-query-id) trimmed-event))
+    (if (= 3 (count trimmed-event)) ;; query, variables, callback
+      (vec (cons (internals/generate-id) trimmed-event))
       trimmed-event)
     trimmed-event))
 
@@ -44,14 +44,14 @@
    :before (fn [ctx]
              (let [re-graph  (:re-graph (get-coeffect ctx :db))
                    event (get-coeffect ctx :event)
-                   provided-instance-name (first event)
-                   instance-name (if (contains? re-graph provided-instance-name) provided-instance-name default-instance-name)
-                   instance (get re-graph instance-name)
+                   provided-instance-id (first event)
+                   instance-id (if (contains? re-graph provided-instance-id) provided-instance-id default-instance-id)
+                   instance (get re-graph instance-id)
                    event-name (first (get-coeffect ctx :original-event))
-                   trimmed-event (->> (if (= provided-instance-name instance-name)
+                   trimmed-event (->> (if (= provided-instance-id instance-id)
                                         (subvec event 1)
                                         event)
-                                      (ensure-query-id event-name))]
+                                      (ensure-id event-name))]
 
                (cond
                  (:destroyed? instance)
@@ -59,14 +59,14 @@
 
                  instance
                  (-> ctx
-                     (assoc-coeffect :instance-name instance-name)
-                     (assoc-coeffect :dispatchable-event (into [event-name instance-name] trimmed-event))
-                     (internals/cons-interceptor (rfi/path :re-graph instance-name))
+                     (assoc-coeffect :instance-id instance-id)
+                     (assoc-coeffect :dispatchable-event (into [event-name instance-id] trimmed-event))
+                     (internals/cons-interceptor (rfi/path :re-graph instance-id))
                      (assoc-coeffect :event trimmed-event))
 
                  :else
                  (do (log/error "No default instance of re-graph found but no valid instance name was provided. Valid instance names are:" (keys re-graph)
-                                "but was provided with" provided-instance-name
+                                "but was provided with" provided-instance-id
                                 "handling event" event-name)
                      ctx))))))
 
@@ -76,20 +76,20 @@
 (re-frame/reg-event-fx
  ::mutate
  interceptors
- (fn [{:keys [instance-name]} [query-id query variables callback-event]]
-   {:dispatch [::core/mutate {:instance-name instance-name
-                              :query-id query-id
+ (fn [{:keys [instance-id]} [id query variables callback]]
+   {:dispatch [::core/mutate {:instance-id instance-id
+                              :id id
                               :query query
                               :variables variables
-                              :callback-event callback-event
+                              :callback callback
                               :legacy? true}]}))
 
 (defn mutate
   "Execute a GraphQL mutation. The arguments are:
 
-  [instance-name query-string variables callback]
+  [instance-id query-string variables callback]
 
-  If the optional `instance-name` is not provided, the default instance is
+  If the optional `instance-id` is not provided, the default instance is
   used. The callback function will receive the result of the mutation as its
   sole argument."
   [& args]
@@ -100,9 +100,9 @@
    (def
      ^{:doc "Executes a mutation synchronously. The arguments are:
 
-             [instance-name query-string variables timeout]
+             [instance-id query-string variables timeout]
 
-             The `instance-name` and `timeout` are optional. The `timeout` is
+             The `instance-id` and `timeout` are optional. The `timeout` is
              specified in milliseconds."}
      mutate-sync
      (partial sync-wrapper mutate)))
@@ -110,20 +110,20 @@
 (re-frame/reg-event-fx
  ::query
  interceptors
- (fn [{:keys [instance-name]} [query-id query variables callback-event]]
-   {:dispatch [::core/query {:instance-name instance-name
-                             :query-id query-id
+ (fn [{:keys [instance-id]} [id query variables callback]]
+   {:dispatch [::core/query {:instance-id instance-id
+                             :id id
                              :query query
                              :variables variables
-                             :callback-event callback-event
+                             :callback callback
                              :legacy? true}]}))
 
 (defn query
   "Execute a GraphQL query. The arguments are:
 
-  [instance-name query-string variables callback]
+  [instance-id query-string variables callback]
 
-  If the optional `instance-name` is not provided, the default instance is
+  If the optional `instance-id` is not provided, the default instance is
   used. The callback function will receive the result of the query as its
   sole argument."
   [& args]
@@ -134,9 +134,9 @@
    (def
      ^{:doc "Executes a query synchronously. The arguments are:
 
-             [instance-name query-string variables timeout]
+             [instance-id query-string variables timeout]
 
-             The `instance-name` and `timeout` are optional. The `timeout` is
+             The `instance-id` and `timeout` are optional. The `timeout` is
              specified in milliseconds."}
      query-sync
      (partial sync-wrapper query)))
@@ -144,77 +144,77 @@
 (re-frame/reg-event-fx
  ::abort
  interceptors
- (fn [{:keys [instance-name]} [query-id]]
-   {:dispatch [::core/abort {:instance-name instance-name
-                             :query-id query-id
+ (fn [{:keys [instance-id]} [id]]
+   {:dispatch [::core/abort {:instance-id instance-id
+                             :id id
                              :legacy? true}]}))
 
 (defn abort
-  ([query-id] (abort default-instance-name query-id))
-  ([instance-name query-id]
-   (re-frame/dispatch [::abort instance-name query-id])))
+  ([id] (abort default-instance-id id))
+  ([instance-id id]
+   (re-frame/dispatch [::abort instance-id id])))
 
 (re-frame/reg-event-fx
  ::subscribe
  interceptors
- (fn [{:keys [instance-name]} [subscription-id query variables callback-event]]
-   {:dispatch [::core/subscribe {:instance-name instance-name
-                                 :subscription-id subscription-id
+ (fn [{:keys [instance-id]} [id query variables callback]]
+   {:dispatch [::core/subscribe {:instance-id instance-id
+                                 :id id
                                  :query query
                                  :variables variables
-                                 :callback-event callback-event
+                                 :callback callback
                                  :legacy? true}]}))
 
 (defn subscribe
-  ([subscription-id query variables callback-fn]
-   (subscribe default-instance-name subscription-id query variables callback-fn))
-  ([instance-name subscription-id query variables callback-fn]
-   (re-frame/dispatch [::subscribe instance-name subscription-id query variables [::internals/callback {:callback-fn callback-fn}]])))
+  ([id query variables callback-fn]
+   (subscribe default-instance-id id query variables callback-fn))
+  ([instance-id id query variables callback-fn]
+   (re-frame/dispatch [::subscribe instance-id id query variables [::internals/callback {:callback-fn callback-fn}]])))
 
 (re-frame/reg-event-fx
  ::unsubscribe
  interceptors
- (fn [{:keys [instance-name]} [subscription-id]]
-   {:dispatch [::core/unsubscribe {:instance-name instance-name
-                                   :subscription-id subscription-id
+ (fn [{:keys [instance-id]} [id]]
+   {:dispatch [::core/unsubscribe {:instance-id instance-id
+                                   :id id
                                    :legacy? true}]}))
 
 (defn unsubscribe
-  ([subscription-id] (unsubscribe default-instance-name subscription-id))
-  ([instance-name subscription-id]
-   (re-frame/dispatch [::unsubscribe instance-name subscription-id])))
+  ([id] (unsubscribe default-instance-id id))
+  ([instance-id id]
+   (re-frame/dispatch [::unsubscribe instance-id id])))
 
 (re-frame/reg-event-fx
  ::re-init
  [re-frame/trim-v re-graph-instance]
- (fn [{:keys [instance-name]} [opts]]
-   {:dispatch [::core/re-init (assoc opts :instance-name instance-name
+ (fn [{:keys [instance-id]} [opts]]
+   {:dispatch [::core/re-init (assoc opts :instance-id instance-id
                                      :legacy? true)]}))
 
 (defn re-init
-  ([opts] (re-init default-instance-name opts))
-  ([instance-name opts]
-   (re-frame/dispatch [::re-init instance-name opts])))
+  ([opts] (re-init default-instance-id opts))
+  ([instance-id opts]
+   (re-frame/dispatch [::re-init instance-id opts])))
 
 (re-frame/reg-event-fx
  ::init
- (fn [_ [_ instance-name opts]]
-   (let [[instance-name opts] (cond
-                                (and (nil? instance-name) (nil? opts))
-                                [default-instance-name {}]
+ (fn [_ [_ instance-id opts]]
+   (let [[instance-id opts] (cond
+                                (and (nil? instance-id) (nil? opts))
+                                [default-instance-id {}]
 
-                                (map? instance-name)
-                                [default-instance-name instance-name]
+                                (map? instance-id)
+                                [default-instance-id instance-id]
 
-                                (nil? instance-name)
-                                [default-instance-name opts]
+                                (nil? instance-id)
+                                [default-instance-id opts]
 
                                 :else
-                                [instance-name opts])
+                                [instance-id opts])
          ws-options (internals/ws-options opts)
          http-options (internals/http-options opts)]
 
-     {:dispatch [::core/init (merge {:instance-name instance-name
+     {:dispatch [::core/init (merge {:instance-id instance-id
                                      :legacy? true}
                                     opts
                                     ws-options
@@ -223,16 +223,16 @@
 (re-frame/reg-event-fx
  ::destroy
  interceptors
- (fn [{:keys [instance-name]} _]
-   {:dispatch [::core/destroy {:instance-name instance-name
+ (fn [{:keys [instance-id]} _]
+   {:dispatch [::core/destroy {:instance-id instance-id
                                :legacy? true}]}))
 
 (defn init
-  ([opts] (init default-instance-name opts))
-  ([instance-name opts]
-   (re-frame/dispatch [::init instance-name opts])))
+  ([opts] (init default-instance-id opts))
+  ([instance-id opts]
+   (re-frame/dispatch [::init instance-id opts])))
 
 (defn destroy
-  ([] (destroy default-instance-name))
-  ([instance-name]
-   (re-frame/dispatch [::destroy instance-name])))
+  ([] (destroy default-instance-id))
+  ([instance-id]
+   (re-frame/dispatch [::destroy instance-id])))

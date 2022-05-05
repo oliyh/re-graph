@@ -4,6 +4,8 @@
             [re-frame.std-interceptors :as rfi]
             [re-graph.logging :as log]
             [re-frame.interop :refer [empty-queue]]
+            [clojure.spec.alpha :as s]
+            #?(:clj [re-graph.spec :as spec])
             #?@(:cljs [[cljs-http.client :as http]
                        [cljs-http.core :as http-core]]
                 :clj  [[re-graph.interop :as interop]])
@@ -81,8 +83,16 @@
                                 "Handling event" (get-coeffect ctx :original-event))
                      ctx))))))
 
-(def interceptors
-  [re-frame/unwrap select-instance instantiate-impl])
+(defn assert-spec [spec]
+  (->interceptor
+   :id ::assert-spec
+   :before (fn [ctx]
+             (s/assert spec (get-coeffect ctx :event))
+             ctx)))
+
+(defn interceptors
+  ([spec] (into (interceptors) [(assert-spec spec)]))
+  ([] [re-frame/unwrap select-instance instantiate-impl]))
 
 (defn- valid-graphql-errors?
   "Validates that response has a valid GraphQL errors map"
@@ -108,7 +118,7 @@
 
 (re-frame/reg-event-fx
  ::http-complete
- interceptors
+ (interceptors)
  (fn [{:keys [db]} {:keys [legacy? id response]}]
    (let [callback (get-in db [:http :requests id :callback])]
      {:db       (-> db
@@ -126,7 +136,7 @@
 
 (re-frame/reg-event-db
  ::register-abort
- interceptors
+ (interceptors)
  (fn [db {:keys [id abort-fn]}]
    (assoc-in db [:http :requests id :abort] abort-fn)))
 
@@ -178,7 +188,7 @@
 
 (re-frame/reg-event-fx
  ::on-ws-data
- interceptors
+ (interceptors)
  (fn [{:keys [db]} {:keys [id payload]}]
    (let [subscription (get-in db [:subscriptions (name id)])]
      (if-let [callback (:callback subscription)]
@@ -190,13 +200,13 @@
 
 (re-frame/reg-event-db
  ::on-ws-complete
- interceptors
+ (interceptors)
  (fn [db {:keys [id]}]
    (update-in db [:subscriptions] dissoc (name id))))
 
 (re-frame/reg-event-fx
  ::connection-init
- interceptors
+ (interceptors)
  (fn [{:keys [db]} _]
     (let [ws (get-in db [:ws :connection])
           payload (get-in db [:ws :connection-init-payload])]
@@ -206,7 +216,7 @@
 
 (re-frame/reg-event-fx
  ::on-ws-open
- interceptors
+ (interceptors)
  (fn [{:keys [db]} {:keys [instance-id websocket]}]
    (merge
     {:db (update db :ws
@@ -230,7 +240,7 @@
 
 (re-frame/reg-event-fx
  ::on-ws-close
- interceptors
+ (interceptors)
  (fn [{:keys [db]} {:keys [instance-id]}]
    (merge
     {:db (let [new-db (-> db
@@ -281,7 +291,7 @@
 
 (re-frame/reg-event-fx
  ::reconnect-ws
- interceptors
+ (interceptors)
  (fn [{:keys [db]} {:keys [instance-id]}]
    (when-not (get-in db [:ws :ready?])
      {::connect-ws [instance-id (:ws db)]})))
@@ -326,7 +336,6 @@
    :sub-protocol "graphql-ws"
    :reconnect-timeout 5000
    :resume-subscriptions? true
-   :connection-init-payload {}
    :impl {}
    :supported-operations #{:subscribe :mutate :query}})
 
@@ -376,3 +385,6 @@
            {:errors [{:message "re-graph did not receive response from server"
                       :opts opts}]}
            result)))))
+
+#?(:clj
+   (s/fdef sync-wrapper :args (s/cat :fn fn? :opts ::spec/sync-operation)))

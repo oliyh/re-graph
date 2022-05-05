@@ -337,8 +337,6 @@ your option) any later version.
 
 
 ## Todo
-- Update docstrings with map keys
-- Add a spec for the map keys for each fn?
 - Update readme
 - Think about how keys are named
   - response or payload? - or should the map just be the response, and not be wrapped in other stuff?

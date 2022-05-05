@@ -7,14 +7,14 @@
             [clojure.spec.alpha :as s]
             [re-graph.spec :as spec]))
 
+;; queries and mutations
+
 (re-frame/reg-event-fx
  ::mutate
- interceptors
+ (interceptors ::spec/mutate)
  (fn [{:keys [db]} {:keys [id query variables callback]
                     :or {id (internals/generate-id)}
                     :as event-payload}]
-
-   (s/assert ::spec/mutate event-payload)
 
    (let [query (str "mutation " (string/replace query #"^mutation\s?" ""))
          websocket-supported? (contains? (get-in db [:ws :supported-operations]) :mutate)]
@@ -51,23 +51,17 @@
 
 #?(:clj
    (def
-     ^{:doc "Executes a mutation synchronously. The arguments are:
-
-             [instance-id query-string variables timeout]
-
-             The `instance-id` and `timeout` are optional. The `timeout` is
-             specified in milliseconds."}
+     ^{:doc "Executes a mutation synchronously.
+             Options are per `mutate` with an additional optional `:timeout` specified in milliseconds."}
      mutate-sync
      (partial internals/sync-wrapper mutate)))
 
 (re-frame/reg-event-fx
  ::query
- interceptors
+ (interceptors ::spec/query)
  (fn [{:keys [db]} {:keys [id query variables callback legacy?]
                     :or {id (internals/generate-id)}
                     :as event-payload}]
-
-   (s/assert ::spec/query event-payload)
 
    (let [query (str "query " (string/replace query #"^query\s?" ""))
          websocket-supported? (contains? (get-in db [:ws :supported-operations]) :query)]
@@ -105,32 +99,34 @@
 
 #?(:clj
    (def
-     ^{:doc "Executes a query synchronously. The arguments are:
-
-             [instance-id query-string variables timeout]
-
-             The `instance-id` and `timeout` are optional. The `timeout` is
-             specified in milliseconds."}
+     ^{:doc "Executes a query synchronously.
+             Options are per `query` with an additional optional `:timeout` specified in milliseconds."}
      query-sync
      (partial internals/sync-wrapper query)))
 
 (re-frame/reg-event-fx
  ::abort
- interceptors
- (fn [{:keys [db]} [id]]
+ (interceptors ::spec/abort)
+ (fn [{:keys [db]} {:keys [id]}]
    (merge
-     {:db (-> db
-              (update :subscriptions dissoc id)
-              (update-in [:http :requests] dissoc id))}
+    {:db (-> db
+             (update :subscriptions dissoc id)
+             (update-in [:http :requests] dissoc id))}
     (when-let [abort-fn (get-in db [:http :requests id :abort])]
       {::internals/call-abort abort-fn}) )))
 
-(defn abort [opts]
+(defn abort
+  "Abort a pending query or mutation. See ::spec/abort for the arguments"
+  [opts]
    (re-frame/dispatch [::abort opts]))
+
+(s/fdef abort :args (s/cat :opts ::spec/abort))
+
+;; subscriptions
 
 (re-frame/reg-event-fx
  ::subscribe
- interceptors
+ (interceptors ::spec/subscribe)
  (fn [{:keys [db]} {:keys [id query variables callback instance-id legacy?] :as event}]
    (cond
      (get-in db [:subscriptions (name id) :active?])
@@ -157,12 +153,16 @@
         " on instance " instance-id
          ": Websocket is not enabled, subscriptions are not possible. Please check your re-graph configuration")))))
 
-(defn subscribe [opts]
+(defn subscribe
+  "Create a GraphQL subscription. See ::spec/subscribe for the arguments"
+  [opts]
   (re-frame/dispatch [::subscribe (update opts :callback (fn [f] [::internals/callback {:callback-fn f}]))]))
+
+(s/fdef subscribe :args (s/cat :opts ::spec/subscribe))
 
 (re-frame/reg-event-fx
  ::unsubscribe
- interceptors
+ (interceptors ::spec/unsubscribe)
  (fn [{:keys [db]} {:keys [id] :as event}]
    (if (get-in db [:ws :ready?])
      {:db (update db :subscriptions dissoc (name id))
@@ -172,24 +172,18 @@
 
      {:db (update-in db [:ws :queue] conj [::unsubscribe event])})))
 
-(defn unsubscribe [opts]
+(defn unsubscribe
+  "Cancel an existing GraphQL subscription. See ::spec/unsubscribe for the arguments"
+  [opts]
   (re-frame/dispatch [::unsubscribe opts]))
 
-(re-frame/reg-event-fx
- ::re-init
- [re-frame/unwrap internals/select-instance]
- (fn [{:keys [db]} opts]
-   (let [new-db (internals/deep-merge db opts)]
-     (merge {:db new-db}
-            (when (get-in new-db [:ws :ready?])
-              {:dispatch [::internals/connection-init opts]})))))
+(s/fdef unsubscribe :args (s/cat :opts ::spec/unsubscribe))
 
-(defn re-init [opts]
-  (re-frame/dispatch [::re-init opts]))
+;; re-graph lifecycle
 
 (re-frame/reg-event-fx
  ::init
- [re-frame/unwrap]
+ [re-frame/unwrap (internals/assert-spec ::spec/init)]
  (fn [{:keys [db]} {:keys [instance-id]
                     :or {instance-id internals/default-instance-id}
                     :as opts}]
@@ -202,9 +196,32 @@
       (when ws
         {::internals/connect-ws [instance-id ws]})))))
 
+(defn init
+  "Initialise an instance of re-graph. See ::spec/init for the arguments"
+  [opts]
+  (re-frame/dispatch [::init opts]))
+
+(s/fdef init :args (s/cat :opts ::spec/init))
+
+(re-frame/reg-event-fx
+ ::re-init
+ [re-frame/unwrap internals/select-instance (internals/assert-spec ::spec/re-init)]
+ (fn [{:keys [db]} opts]
+   (let [new-db (internals/deep-merge db opts)]
+     (merge {:db new-db}
+            (when (get-in new-db [:ws :ready?])
+              {:dispatch [::internals/connection-init opts]})))))
+
+(defn re-init
+  "Re-initialise an instance of re-graph. See ::spec/re-init for the arguments"
+  [opts]
+  (re-frame/dispatch [::re-init opts]))
+
+(s/fdef re-init :args (s/cat :opts ::spec/re-init))
+
 (re-frame/reg-event-fx
  ::destroy
- interceptors
+ (interceptors ::spec/destroy)
  (fn [{:keys [db]} {:keys [instance-id]}]
    (if-let [ids (not-empty (-> db :subscriptions keys))]
      {:dispatch-n (for [id ids]
@@ -217,8 +234,9 @@
       (when-let [ws (get-in db [:ws :connection])]
         {::internals/disconnect-ws [ws]})))))
 
-(defn init [opts]
-  (re-frame/dispatch [::init opts]))
-
-(defn destroy [opts]
+(defn destroy
+  "Destroy an instance of re-graph. See ::spec/destroy for the arguments"
+  [opts]
   (re-frame/dispatch [::destroy opts]))
+
+(s/fdef destroy :args (s/cat :opts ::spec/destroy))
