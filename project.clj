@@ -19,6 +19,7 @@
                  [cljs-http "0.1.46"]
                  [org.clojure/tools.logging "1.2.4"]
                  [cheshire "5.10.2"]
+                 [org.clojure/spec.alpha "0.3.218"]
                  [re-graph.hato :version]]
   :profiles {:provided {:dependencies [[org.clojure/clojure "1.10.3"]
                                        [org.clojure/clojurescript "1.11.4"]]}
