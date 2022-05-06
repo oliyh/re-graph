@@ -167,34 +167,36 @@ All function/event signatures now take an optional instance-name as the first ar
 (require '[re-graph.core :as re-graph])
 
 ;; initialise re-graph for service A
-(re-graph/init :service-a {:ws-url "wss://a.com/graphql-ws})
+(re-graph/init {:instance-id :service-a
+                :ws {:url "wss://a.com/graphql-ws}})
 
 ;; initialise re-graph for service B
-(re-graph/init :service-b {:ws-url "wss://b.net/api/graphql-ws})
+(re-graph/init {:instance-id :service-b
+                :ws {:url "wss://b.com/api/graphql-ws}})
 
 (defn on-a-thing [{:keys [data errors] :as payload}]
   ;; do things with data from service A
 ))
 
 ;; subscribe to service A, events will be sent to the on-a-thing callback
-(re-graph/subscribe :service-a           ;; the instance-name you want to talk to
-                    :my-subscription-id  ;; this id should uniquely identify this subscription for this service
-                    "{ things { a } }"
-                    on-a-thing)
+(re-graph/subscribe {:instance-id :service-a    ;; the instance-name you want to talk to
+                     :id :my-subscription-id    ;; this id should uniquely identify this subscription for this service
+                     :query "{ things { a } }"
+                     :callback on-a-thing})
 
 (defn on-b-thing [{:keys [data errors] :as payload}]
   ;; do things with data from service B
 ))
 
 ;; subscribe to service B, events will be sent to the on-b-thing callback
-(re-graph/subscribe :service-b           ;; the instance-name you want to talk to
-                    :my-subscription-id
-                    "{ things { b } }"
-                    on-b-thing)
+(re-graph/subscribe {:instance-id :service-b    ;; the instance-name you want to talk to
+                     :id :my-subscription-id
+                     :query "{ things { a } }"
+                     :callback on-b-thing})
 
 ;; stop the subscriptions
-(re-graph/unsubscribe :service-a :my-subscription-id)
-(re-graph/unsubscribe :service-b :my-subscription-id)
+(re-graph/unsubscribe {:instance-id :service-a :id :my-subscription-id})
+(re-graph/unsubscribe {:instance-id :service-b :id :my-subscription-id})
 ```
 
 ## Authentication
@@ -336,9 +338,6 @@ Copyright © 2017 oliyh
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.
 
-
-
 ## Todo
-- Update readme (got up to 'multiple instances'
 - should subs also have map args?
 - release notes describing upgrade, and point out deprecated ns
