@@ -195,8 +195,10 @@ All function/event signatures now take an optional instance-name as the first ar
                      :callback on-b-thing})
 
 ;; stop the subscriptions
-(re-graph/unsubscribe {:instance-id :service-a :id :my-subscription-id})
-(re-graph/unsubscribe {:instance-id :service-b :id :my-subscription-id})
+(re-graph/unsubscribe {:instance-id :service-a
+                       :id :my-subscription-id})
+(re-graph/unsubscribe {:instance-id :service-b
+                       :id :my-subscription-id})
 ```
 
 ## Authentication
@@ -337,6 +339,3 @@ Copyright © 2017 oliyh
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.
-
-## Todo
-- release notes describing upgrade, and point out deprecated ns

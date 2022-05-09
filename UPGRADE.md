@@ -1,5 +1,10 @@
 # Upgrading from 0.1.x to 0.2.0
 
+- [Rationale](#rationale)
+- [Spec and Instrumentation](#spec-and-instrumentation)
+- [API changes](#api-changes)
+- [Legacy API](#legacy-api)
+
 ## Rationale
 
 The signature of re-graph events had become overloaded with two features:
@@ -25,42 +30,158 @@ namely that positional significance of arguments becomes problematic with large 
 re-frame has added an `unwrap` interceptor to make working with a single map argument easier, and re-graph now follows
 this convention with consistently-named keys to remove ambiguity.
 
-## Changes
+## Spec and Instrumentation
+
+The re-graph API is now described by [re-graph.spec](https://github.com/oliyh/re-graph/blob/re-frame-maps/src/re_graph/spec.cljc).
+All functions have specs and the implementation re-frame events also have an assertion on the event payload.
+
+This means you can validate your calls to re-graph by turning on instrumentation (for the Clojure/script API) and/or assertions (for re-frame users):
+
+```clj
+;; instrumentation
+(require '[clojure.spec.test.alpha :as stest])
+(stest/instrument)
+
+;; assertions
+(require '[clojure.spec.alpha :as s])
+(s/check-asserts true)
+```
+
+## API changes
 
 All re-frame events (and all vanilla functions) in re-graph's `core` api now accept a single map argument.
 
-Queries, mutations and subscriptions are closely aligned.
+Queries, mutations and subscriptions are closely aligned, accepting `:query`, `:variables`, `:callback` and `:id`.
 
-Updating a simple call to `query`:
+Note that it is expected re-frame callbacks also follow the same convention of a single map argument, with `:response` containing the response from the server.
+Vanilla Clojure/script API callback functions remain unchanged.
+
+Examples below show mostly the re-frame events but the Clojure/script API functions take the exact same map arguments.
+
+### Examples
+
+#### re-frame callbacks
+
+A re-frame callback that was originally defined and invoked as follows:
 ```clj
+(rf/reg-event-db
+  ::my-callback
+  (fn [db [_ response]]
+    (assoc db :response response)))
+
 (rf/dispatch [::re-graph/query "{ some { thing } }" {:some "variable"} [::my-callback]])
 ```
-
-Now looks like:
-
-```clj
-(rf/dispatch [::re-graph/query {:query "{ some { thing } }"
-                                :variables {:some "variable"}
-                                :callback [::my-callback]}])
-```
-
-Note that it is expected that `::my-callback` also follows the same convention of a single map argument, with `:response` containing the response from the server:
-
+Should now expect the response to be under the `:response` key in a single map argument (destructured here using `unwrap`):
 ```clj
 (rf/reg-event-db
   ::my-callback
   [rf/unwrap]
   (fn [db {:keys [response]}]
     (assoc db :response response)))
+
+(rf/dispatch [::re-graph/query {:query "{ some { thing } }"
+                                :variables {:some "variable"}
+                                :callback [::my-callback]}])
 ```
 
-If you wish to pass additional data to the callback you would have previously done this:
+Any partial params supplied like `my-opts` shown here:
+```clj
+(rf/reg-event-db
+  ::my-callback
+  (fn [db [_ my-opts response]]
+    (assoc db :response response)))
+
+(rf/dispatch [::re-graph/query "{ some { thing } }" {:some "variable"} [::my-callback {:my-opts true}]])
+```
+Should now be used like this:
+```clj
+(rf/reg-event-db
+  ::my-callback
+  [rf/unwrap]
+  (fn [db {:keys [my-opts response]}]
+    (assoc db :response response)))
+
+(rf/dispatch [::re-graph/query {:query "{ some { thing } }"
+                                :variables {:some "variable"}
+                                :callback [::my-callback {:my-opts true}]}])
+```
+
+#### Simple query
+
+A query with some variables and a callback:
+```clj
+(rf/dispatch [::re-graph/query "{ some { thing } }" {:some "variable"} [::my-callback]])
+```
+becomes
+```clj
+(rf/dispatch [::re-graph/query {:query "{ some { thing } }"
+                                :variables {:some "variable"}
+                                :callback [::my-callback]}])
+```
+
+Or, if you were using the vanilla Clojure/script API:
+```clj
+(re-graph/query "{ some { thing } }" {:some "variable"} (fn [response] ...))
+```
+becomes
+```clj
+(re-graph/query {:query "{ some { thing } }"
+                 :variables {:some "variable"}
+                 :callback (fn [response] ...)})
+```
 
 
-But now you should do this:
+#### Subscriptions
 
+Subscriptions have always required an id, which could optionally be used for queries and mutations as well. These are now named `:id`:
+```clj
+(rf/dispatch [::re-graph/subscribe :my-subscription-id "{ some { thing } }" {:some "variable"} [::my-callback]])
+```
+becomes
+```clj
+(rf/dispatch [::re-graph/subscribe {:id :my-subscription-id
+                                    :query "{ some { thing } }"
+                                    :variables {:some "variable"}
+                                    :callback [::my-callback]}])
+```
 
-If you really need the old style, use ;legacy ;; does this work?
+And to unsubscribe:
+```clj
+(rf/dispatch [::re-graph/unsubscribe :my-subscription-id])
+```
+becomes
+```clj
+(rf/dispatch [::re-graph/unsubscribe {:id :my-subscription-id}])
+```
 
+#### Multiple instances
 
-## Deprecated core namespace
+You can supply `:instance-id` to the `init` (and `re-init`) events and to any subsequent queries:
+```clj
+(rf/dispatch [::re-graph/init :my-service {:ws {:url "https://my.service"}}])
+
+(rf/dispatch [::re-graph/query :my-service "{ some { thing } }" {:some "variable"} [::my-callback]])
+```
+becomes
+```clj
+(rf/dispatch [::re-graph/init {:instance-id :my-service
+                               :ws {:url "https://my.service"}}])
+
+(rf/dispatch [::re-graph/query {:instance-id :my-service
+                                :query "{ some { thing } }"
+                                :variables {:some "variable"}
+                                :callback [::my-callback]}])
+```
+
+And to destroy:
+```clj
+(rf/dispatch [::re-graph/destroy :my-service])
+```
+becomes
+```clj
+(rf/dispatch [::re-graph/destroy {:instance-id :my-service}])
+```
+
+## Legacy API
+
+The original API is available at `re-graph.core-deprecated`. This will be removed in a future release.
