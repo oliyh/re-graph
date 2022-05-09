@@ -4,7 +4,7 @@ re-graph is a graphql client for Clojure and ClojureScript with bindings for [re
 
 ## Upgrade notice
 
-Version `0.2.0` was recently released with breaking API changes. Please read the [Upgrade](UPGRADE.md) guide for more information.
+:fire: Version `0.2.0` was recently released with breaking API changes. Please read the [Upgrade](UPGRADE.md) guide for more information.
 
 ## Notes
 
