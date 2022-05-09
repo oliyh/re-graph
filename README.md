@@ -2,6 +2,10 @@
 
 re-graph is a graphql client for Clojure and ClojureScript with bindings for [re-frame](https://github.com/Day8/re-frame) applications.
 
+## Upgrade notice
+
+Version `0.2.0` was recently released with breaking API changes. Please read the [Upgrade](UPGRADE.md) guide for more information.
+
 ## Notes
 
 This library behaves like the popular [Apollo client](https://github.com/apollographql/subscriptions-transport-ws)
