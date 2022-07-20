@@ -6,7 +6,12 @@
             [day8.re-frame.test :refer [run-test-async wait-for #?(:clj with-temp-re-frame-state)]]
             [re-frame.core :as re-frame]
             [re-frame.db :as rfdb]
+            [clojure.spec.alpha :as s]
+            [clojure.spec.test.alpha :as stest]
             #?(:clj [re-graph.integration-server :refer [with-server]])))
+
+(stest/instrument)
+(s/check-asserts true)
 
 #?(:clj (use-fixtures :once with-server))
 
@@ -23,7 +28,9 @@
    (register-callback!)
 
    (testing "async query"
-     (re-graph/query "{ pets { id name } }" {} #(re-frame/dispatch [::callback %]))
+     (re-graph/query {:query "{ pets { id name } }"
+                      :variables {}
+                      :callback #(re-frame/dispatch [::callback %])})
 
      (wait-for
       [::callback]
@@ -50,7 +57,9 @@
     (register-callback!)
 
     (testing "async mutate"
-      (re-graph/mutate "mutation { createPet(name: \"Zorro\") { id name } }" {} #(re-frame/dispatch [::callback %]))
+      (re-graph/mutate {:query "mutation { createPet(name: \"Zorro\") { id name } }"
+                        :variables {}
+                        :callback #(re-frame/dispatch [::callback %])})
 
       (wait-for
        [::callback]
@@ -69,11 +78,13 @@
                   [{:id "123", :name "Billy"}
                    {:id "234", :name "Bob"}
                    {:id "345", :name "Beatrice"}]}}
-                (re-graph/query-sync "{ pets { id name } }" {}))))
+                (re-graph/query-sync {:query "{ pets { id name } }"
+                                      :variables {}}))))
 
        (testing "sync mutate"
          (is (= {:data {:createPet {:id "999", :name "Zorro"}}}
-                (re-graph/mutate-sync "mutation { createPet(name: \"Zorro\") { id name } }" {}))))
+                (re-graph/mutate-sync {:query "mutation { createPet(name: \"Zorro\") { id name } }"
+                                       :variables {}}))))
 
        (testing "error handling"
          (is (= {:errors
@@ -82,76 +93,79 @@
                    :extensions {:type-name "Query"
                                 :field-name "malformed"
                                 :status 400}}]}
-                (re-graph/query-sync "{ malformed }" {})))))))
+                (re-graph/query-sync {:query "{ malformed }"
+                                      :variables {}})))))))
 
 (deftest websocket-query-test
    (run-test-async
     (re-graph/init {:ws {:url "ws://localhost:8888/graphql-ws"}
                     :http nil})
 
-    (re-frame/reg-fx
-     ::internals/disconnect-ws
-     (fn [_]
-       (re-frame/dispatch [::ws-disconnected])))
+    (wait-for [::re-graph/init]
 
-    (re-frame/reg-event-fx
-     ::ws-disconnected
-     (fn [& _args]
-       ;; do nothing
-       {}))
+              (re-frame/reg-event-db
+               ::complete
+               (fn [db _]
+                 db))
 
-    (re-frame/reg-event-db
-     ::complete
-     (fn [db _]
-       db))
+              (re-frame/reg-event-fx
+               ::callback
+               [re-frame/unwrap]
+               (fn [{:keys [db]} {:keys [response]}]
+                 (let [new-db (update db ::responses conj response)]
+                   (merge
+                    {:db new-db}
+                    (when (<= 5 (count (::responses new-db)))
+                      {:dispatch [::complete]})))))
 
-    (re-frame/reg-event-fx
-     ::callback
-     (fn [{:keys [db]} [_ response]]
-       (let [new-db (update db ::responses conj response)]
-         (merge
-          {:db new-db}
-          (when (<= 5 (count (::responses new-db)))
-            {:dispatch [::complete]})))))
+              (testing "subscriptions"
+                (re-graph/subscribe {:id :all-pets
+                                     :query "MyPets($count: Int) { pets(count: $count) { id name } }"
+                                     :variables {:count 5}
+                                     :callback #(re-frame/dispatch [::callback {:response %}])})
 
-    (testing "subscriptions"
-      (re-graph/subscribe :all-pets "MyPets($count: Int) { pets(count: $count) { id name } }" {:count 5}
-                          #(re-frame/dispatch [::callback %]))
+                (wait-for
+                 [::complete]
+                 (let [responses (::responses @rfdb/app-db)]
+                   (is (every? #(= {:data
+                                    {:pets
+                                     [{:id "123", :name "Billy"}
+                                      {:id "234", :name "Bob"}
+                                      {:id "345", :name "Beatrice"}]}}
+                                   %)
+                               responses))
+                   (is (= 5 (count responses)))
 
-      (wait-for
-       [::complete]
-       (let [responses (::responses @rfdb/app-db)]
-         (is (every? #(= {:data
-                          {:pets
-                           [{:id "123", :name "Billy"}
-                            {:id "234", :name "Bob"}
-                            {:id "345", :name "Beatrice"}]}}
-                         %)
-                     responses))
-         (is (= 5 (count responses))))))))
+                   #_(re-graph/destroy)
+                   #_(wait-for [::re-graph/destroy]
+                             (println "test complete"))))))))
 
 (deftest websocket-mutation-test
   (run-test-async
    (re-graph/init {:ws {:url "ws://localhost:8888/graphql-ws"}
                    :http nil})
-   (register-callback!)
 
-   (re-frame/reg-fx
-    ::internals/disconnect-ws
-    (fn [_]
-      (re-frame/dispatch [::ws-disconnected])))
+   (wait-for [::re-graph/init]
+             (register-callback!)
 
-   (re-frame/reg-event-fx
-    ::ws-disconnected
-    (fn [& _args]
-      ;; do nothing
-      {}))
+             (re-frame/reg-fx
+              ::internals/disconnect-ws
+              (fn [_]
+                (re-frame/dispatch [::ws-disconnected])))
 
-   (testing "mutations"
-     (testing "async mutate"
-       (re-graph/mutate "mutation { createPet(name: \"Zorro\") { id name } }" {} #(re-frame/dispatch [::callback %]))
+             (re-frame/reg-event-fx
+              ::ws-disconnected
+              (fn [& _args]
+                ;; do nothing
+                {}))
 
-       (wait-for
-        [::callback]
-        (is (= {:data {:createPet {:id "999", :name "Zorro"}}}
-               (::response @rfdb/app-db))))))))
+             (testing "mutations"
+               (testing "async mutate"
+                 (re-graph/mutate {:query "mutation { createPet(name: \"Zorro\") { id name } }"
+                                   :variables {}
+                                   :callback #(re-frame/dispatch [::callback %])})
+
+                 (wait-for
+                  [::callback]
+                  (is (= {:data {:createPet {:id "999", :name "Zorro"}}}
+                         (::response @rfdb/app-db)))))))))

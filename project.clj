@@ -1,4 +1,4 @@
-(defproject re-graph "0.1.18-SNAPSHOT"
+(defproject re-graph "0.2.0-SNAPSHOT"
   :description "GraphQL client for re-frame applications"
   :url "https://github.com/oliyh/re-graph"
   :license {:name "Eclipse Public License"
@@ -19,6 +19,7 @@
                  [cljs-http "0.1.46"]
                  [org.clojure/tools.logging "1.2.4"]
                  [cheshire "5.10.2"]
+                 [org.clojure/spec.alpha "0.3.218"]
                  [re-graph.hato :version]]
   :profiles {:provided {:dependencies [[org.clojure/clojure "1.10.3"]
                                        [org.clojure/clojurescript "1.11.4"]]}

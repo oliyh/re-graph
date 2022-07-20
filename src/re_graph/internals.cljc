@@ -1,9 +1,11 @@
 (ns re-graph.internals
   (:require [re-frame.core :as re-frame]
-            [re-frame.interceptor :refer [->interceptor get-coeffect assoc-coeffect update-coeffect get-effect assoc-effect]]
+            [re-frame.interceptor :refer [->interceptor get-coeffect update-coeffect get-effect assoc-effect]]
             [re-frame.std-interceptors :as rfi]
-            [re-frame.interop :refer [empty-queue]]
             [re-graph.logging :as log]
+            [re-frame.interop :refer [empty-queue]]
+            [clojure.spec.alpha :as s]
+            [re-graph.spec :as spec]
             #?@(:cljs [[cljs-http.client :as http]
                        [cljs-http.core :as http-core]]
                 :clj  [[re-graph.interop :as interop]])
@@ -12,9 +14,9 @@
   #?(:cljs (:require-macros [cljs.core.async.macros :refer [go]]))
   #?(:clj (:import [java.util UUID])))
 
-(def default-instance-name ::default)
+(def default-instance-id ::default)
 
-(defn- cons-interceptor [ctx interceptor]
+(defn cons-interceptor [ctx interceptor]
   (update ctx :queue #(into (into empty-queue [interceptor]) %)))
 
 (defn- encode [obj]
@@ -27,16 +29,9 @@
                (js->clj :keywordize-keys true))
      :clj (json/decode m keyword)))
 
-(defn generate-query-id []
+(defn generate-id []
   #?(:cljs (.substr (.toString (Math/random) 36) 2 8)
      :clj (str (UUID/randomUUID))))
-
-(defn- ensure-query-id [event-name trimmed-event]
-  (if (contains? #{:re-graph.core/query :re-graph.core/mutate} event-name)
-    (if (= 3 (count trimmed-event)) ;; query, variables, callback-event
-      (vec (cons (generate-query-id) trimmed-event))
-      trimmed-event)
-    trimmed-event))
 
 (defn deep-merge [a b]
   (merge-with
@@ -73,52 +68,31 @@
                                               http-impl (assoc-in [:http :impl] http-impl)
                                               ws-impl (assoc-in [:ws :impl] ws-impl))))))))
 
-(def re-graph-instance
+(def select-instance
   (->interceptor
-   :id ::instance
+   :id ::select-instance
    :before (fn [ctx]
-             (let [re-graph  (:re-graph (get-coeffect ctx :db))
-                   event (get-coeffect ctx :event)
-                   provided-instance-name (first event)
-                   instance-name (if (contains? re-graph provided-instance-name) provided-instance-name default-instance-name)
-                   instance (get re-graph instance-name)
-                   event-name (first (get-coeffect ctx :original-event))
-                   trimmed-event (->> (if (= provided-instance-name instance-name)
-                                        (subvec event 1)
-                                        event)
-                                      (ensure-query-id event-name))]
-
-               (cond
-                 (:destroyed? instance)
-                 (do (log/error "It looks like the re-graph instance has been destroyed, so cannot handle event" event-name)
-                     ctx)
-
-                 instance
+             (let [re-graph (:re-graph (get-coeffect ctx :db))
+                   instance-id (:instance-id (get-coeffect ctx :event) default-instance-id)
+                   instance (get re-graph instance-id)]
+               (if instance
                  (-> ctx
-                     (assoc-coeffect :instance-name instance-name)
-                     (assoc-coeffect :dispatchable-event (into [event-name instance-name] trimmed-event))
-                     (cons-interceptor (rfi/path :re-graph instance-name))
-                     (assoc-coeffect :event trimmed-event))
-
-                 (and provided-instance-name (seq (keys re-graph)))
-                 (do (log/error "No default instance of re-graph found but no valid instance name was provided. Valid instance names are:" (keys re-graph)
-                                "but was provided with" provided-instance-name
-                                "handling event" event-name)
-                     ctx)
-
-                 (nil? re-graph)
-                 (do (log/error "It looks like re-graph has not been initialised yet, so cannot handle event" event-name)
-                     ctx)
-
-                 :else
-                 (do (log/error "No re-graph valid re-graph instance found. Valid instance ids are:" (keys re-graph)
-                                "but was provided with instance id" provided-instance-name
-                                "handling event" event-name
-                                "Have you initialised re-graph properly?")
+                     (update-coeffect :event assoc :instance-id instance-id)
+                     (cons-interceptor (rfi/path :re-graph instance-id)))
+                 (do (log/error "No re-graph instance found for instance-id" instance-id " - have you initialised re-graph properly?"
+                                "Handling event" (get-coeffect ctx :original-event))
                      ctx))))))
 
-(def interceptors
-  [re-frame/trim-v re-graph-instance instantiate-impl])
+(defn assert-spec [spec]
+  (->interceptor
+   :id ::assert-spec
+   :before (fn [ctx]
+             (s/assert spec (get-coeffect ctx :event))
+             ctx)))
+
+(defn interceptors
+  ([spec] (into (interceptors) [(assert-spec spec)]))
+  ([] [re-frame/unwrap select-instance instantiate-impl]))
 
 (defn- valid-graphql-errors?
   "Validates that response has a valid GraphQL errors map"
@@ -144,13 +118,16 @@
 
 (re-frame/reg-event-fx
  ::http-complete
- interceptors
- (fn [{:keys [db]} [query-id payload]]
-   (let [callback-event (get-in db [:http :requests query-id :callback])]
+ (interceptors)
+ (fn [{:keys [db]} {:keys [legacy? id response]}]
+   (let [callback (get-in db [:http :requests id :callback])]
      {:db       (-> db
-                    (update :subscriptions dissoc query-id)
-                    (update-in [:http :requests] dissoc query-id))
-      :dispatch (conj callback-event payload)})))
+                    (update :subscriptions dissoc id)
+                    (update-in [:http :requests] dissoc id))
+      :dispatch (if (and legacy? ;; enforce legacy behaviour for deprecated api
+                         (not= ::callback (first callback)))
+                  (conj callback response)
+                  (update callback 1 assoc :response response))})))
 
 (re-frame/reg-fx
  ::call-abort
@@ -159,41 +136,37 @@
 
 (re-frame/reg-event-db
  ::register-abort
- interceptors
- (fn [db [query-id abort-fn]]
-   (assoc-in db [:http :requests query-id :abort] abort-fn)))
+ (interceptors)
+ (fn [db {:keys [id abort-fn]}]
+   (assoc-in db [:http :requests id :abort] abort-fn)))
 
 (def unexceptional-status?
   #{200 201 202 203 204 205 206 207 300 301 302 303 304 307})
 
 (re-frame/reg-fx
  ::send-http
- (fn [[instance-name query-id http-url {:keys [request payload]}]]
-   #?(:cljs (let [response-chan (http/post http-url (assoc request :json-params payload))]
-              (re-frame/dispatch [::register-abort instance-name query-id #(http-core/abort! response-chan)])
+ (fn [{:keys [event url request payload]}]
+   #?(:cljs (let [response-chan (http/post url (assoc request :json-params payload))]
+              (re-frame/dispatch [::register-abort (assoc event :abort-fn #(http-core/abort! response-chan))])
 
               (go (let [{:keys [status body error-code]} (a/<! response-chan)]
                     (re-frame/dispatch [::http-complete
-                                        instance-name
-                                        query-id
-                                        (if (= :no-error error-code)
-                                          body
-                                          (insert-http-status body status))]))))
+                                        (assoc event :response (if (= :no-error error-code)
+                                                                 body
+                                                                 (insert-http-status body status)))]))))
 
-      :clj (let [future (interop/send-http http-url
+      :clj (let [future (interop/send-http url
                                            request
                                            (encode payload)
                                            (fn [{:keys [status body]}]
                                              (re-frame/dispatch [::http-complete
-                                                                 instance-name
-                                                                 query-id
-                                                                 (if (unexceptional-status? status)
-                                                                   body
-                                                                   (insert-http-status body status))]))
+                                                                 (assoc event :response (if (unexceptional-status? status)
+                                                                                          body
+                                                                                          (insert-http-status body status)))]))
                                            (fn [exception]
                                              (let [{:keys [status body]} (ex-data exception)]
-                                               (re-frame/dispatch [::http-complete instance-name query-id (insert-http-status body status)]))))]
-             (re-frame/dispatch [::register-abort instance-name query-id #(.cancel future)])))))
+                                               (re-frame/dispatch [::http-complete (assoc event :response (insert-http-status body status))]))))]
+             (re-frame/dispatch [::register-abort (assoc event :abort-fn #(.cancel future))])))))
 
 (re-frame/reg-fx
  ::send-ws
@@ -209,27 +182,32 @@
 
 (re-frame/reg-event-fx
  ::callback
- (fn [_ [_ callback-fn payload]]
-   {::call-callback [callback-fn payload]}))
+ [re-frame/unwrap]
+ (fn [_ {:keys [callback-fn response]}]
+   {::call-callback [callback-fn response]}))
 
 (re-frame/reg-event-fx
  ::on-ws-data
- interceptors
- (fn [{:keys [db]} [subscription-id payload]]
-   (if-let [callback-event (get-in db [:subscriptions (name subscription-id) :callback])]
-     {:dispatch (conj callback-event payload)}
-     (log/warn "No callback-event found for subscription" subscription-id))))
+ (interceptors)
+ (fn [{:keys [db]} {:keys [id payload]}]
+   (let [subscription (get-in db [:subscriptions (name id)])]
+     (if-let [callback (:callback subscription)]
+       (if (and (:legacy? subscription)
+                (not= ::callback (first callback)))
+         {:dispatch (conj callback payload)}
+         {:dispatch (update callback 1 assoc :response payload)})
+       (log/warn "No callback found for subscription" id)))))
 
 (re-frame/reg-event-db
  ::on-ws-complete
- interceptors
- (fn [db [subscription-id]]
-   (update-in db [:subscriptions] dissoc (name subscription-id))))
+ (interceptors)
+ (fn [db {:keys [id]}]
+   (update-in db [:subscriptions] dissoc (name id))))
 
 (re-frame/reg-event-fx
  ::connection-init
- interceptors
-  (fn [{:keys [db]} _]
+ (interceptors)
+ (fn [{:keys [db]} _]
     (let [ws (get-in db [:ws :connection])
           payload (get-in db [:ws :connection-init-payload])]
       (when payload
@@ -238,20 +216,21 @@
 
 (re-frame/reg-event-fx
  ::on-ws-open
- interceptors
- (fn [{:keys [db instance-name]} [ws]]
+ (interceptors)
+ (fn [{:keys [db]} {:keys [instance-id websocket]}]
    (merge
     {:db (update db :ws
                     assoc
-                    :connection ws
+                    :connection websocket
                     :ready? true
                     :queue [])}
-
     (let [resume? (get-in db [:ws :resume-subscriptions?])
           subscriptions (when resume? (->> db :subscriptions vals (map :event)))
           queue (get-in db [:ws :queue])
-          to-send (concat [[::connection-init instance-name]] subscriptions queue)]
-      {:dispatch-n to-send}))))
+          to-send (concat [[::connection-init {:instance-id instance-id}]]
+                          subscriptions
+                          queue)]
+      {:dispatch-n (vec to-send)}))))
 
 (defn- deactivate-subscriptions [subscriptions]
   (reduce-kv (fn [subs sub-id sub]
@@ -261,8 +240,8 @@
 
 (re-frame/reg-event-fx
  ::on-ws-close
- interceptors
- (fn [{:keys [db instance-name]} _]
+ (interceptors)
+ (fn [{:keys [db]} {:keys [instance-id]}]
    (merge
     {:db (let [new-db (-> db
                           (assoc-in [:ws :ready?] false)
@@ -270,64 +249,70 @@
            new-db)}
     (when-let [reconnect-timeout (get-in db [:ws :reconnect-timeout])]
       {:dispatch-later [{:ms reconnect-timeout
-                         :dispatch [::reconnect-ws instance-name]}]}))))
+                         :dispatch [::reconnect-ws {:instance-id instance-id}]}]}))))
 
-(defn- on-ws-message [instance-name]
+(defn- on-ws-message [instance-id]
   (fn [m]
     (let [{:keys [type id payload]} (message->data m)]
       (condp = type
         "data"
-        (re-frame/dispatch [::on-ws-data instance-name id payload])
+        (re-frame/dispatch [::on-ws-data {:instance-id instance-id
+                                          :id id
+                                          :payload payload}])
 
         "complete"
-        (re-frame/dispatch [::on-ws-complete instance-name id])
+        (re-frame/dispatch [::on-ws-complete {:instance-id instance-id
+                                              :id id}])
 
         "error"
-        (re-frame/dispatch [::on-ws-data instance-name id {:errors payload}])
+        (re-frame/dispatch [::on-ws-data {:instance-id instance-id
+                                          :id id
+                                          :payload {:errors payload}}])
 
-        (log/debug "Ignoring graphql-ws event " instance-name " - " type)))))
+        (log/debug "Ignoring graphql-ws event " instance-id " - " type)))))
 
 (defn- on-open
-  ([instance-name]
+  ([instance-id]
    (fn [websocket]
-     ((on-open instance-name websocket))))
-  ([instance-name websocket]
+     ((on-open instance-id websocket))))
+  ([instance-id websocket]
    (fn []
-     (log/info "opened ws" websocket)
-     (re-frame/dispatch [::on-ws-open instance-name websocket]))))
+     (log/info "opened ws" instance-id websocket)
+     (re-frame/dispatch [::on-ws-open {:instance-id instance-id
+                                       :websocket websocket}]))))
 
-(defn- on-close [instance-name]
+(defn- on-close [instance-id]
   (fn [& _args]
-    (re-frame/dispatch [::on-ws-close instance-name])))
+    (re-frame/dispatch [::on-ws-close {:instance-id instance-id}])))
 
-(defn- on-error [instance-name]
+(defn- on-error [instance-id]
   (fn [e]
-    (log/warn "GraphQL websocket error" instance-name e)))
+    (log/warn "GraphQL websocket error" instance-id e)))
 
 (re-frame/reg-event-fx
  ::reconnect-ws
- interceptors
- (fn [{:keys [db instance-name]} _]
+ (interceptors)
+ (fn [{:keys [db]} {:keys [instance-id]}]
    (when-not (get-in db [:ws :ready?])
-     {::connect-ws [instance-name db]})))
+     {::connect-ws [instance-id (:ws db)]})))
 
 (re-frame/reg-fx
   ::connect-ws
-  (fn [[instance-name {{:keys [url sub-protocol #?(:clj impl)]} :ws}]]
+  (fn [[instance-id {:keys [url sub-protocol #?(:clj impl)]}]]
     #?(:cljs (let [ws (cond
                        (nil? sub-protocol)
                        (js/WebSocket. url)
                        :else ;; non-nil sub protocol
                        (js/WebSocket. url sub-protocol))]
-              (aset ws "onmessage" (on-ws-message instance-name))
-              (aset ws "onopen" (on-open instance-name ws))
-              (aset ws "onclose" (on-close instance-name))
-              (aset ws "onerror" (on-error instance-name)))
+              (aset ws "onmessage" (on-ws-message instance-id))
+              (aset ws "onopen" (on-open instance-id ws))
+              (aset ws "onclose" (on-close instance-id))
+              (aset ws "onerror" (on-error instance-id)))
        :clj  (interop/create-ws url (merge (build-impl impl)
-                                           {:on-open      (on-open instance-name)
-                                            :on-message   (on-ws-message instance-name)
-                                            :on-close     (on-close instance-name)
-                                            :on-error     (on-error instance-name)
+                                           {:on-open      (on-open instance-id)
+                                            :on-message   (on-ws-message instance-id)
+                                            :on-close     (on-close instance-id)
+                                            :on-error     (on-error instance-id)
                                             :subprotocols [sub-protocol]})))))
 
 (re-frame/reg-fx
@@ -388,19 +373,19 @@
       synchronously. Will return a GraphQL error response if no response is
       received before the timeout (default 3000ms) expires. Will throw if the
       call returns an exception."
-     [f & args]
-     (let [timeout  (when (int? (last args)) (last args))
-           timeout' (or timeout 3000)
-           p        (promise)
-           callback (fn [result] (deliver p result))
-           args'    (conj (vec (if timeout (butlast args) args))
-                          callback)]
-       (apply f args')
+     [f {:keys [timeout]
+         :or {timeout 3000}
+         :as opts}]
+     (let [p        (promise)
+           callback (fn [result] (deliver p result))]
+       (f (assoc opts :callback callback))
 
        ;; explicit timeout to avoid unreliable aborts from underlying implementations
-       (let [result (deref p timeout' ::timeout)]
+       (let [result (deref p timeout ::timeout)]
          (if (= ::timeout result)
            {:errors [{:message "re-graph did not receive response from server"
-                      :timeout timeout'
-                      :args args}]}
+                      :opts opts}]}
            result)))))
+
+#?(:clj
+   (s/fdef sync-wrapper :args (s/cat :fn fn? :opts ::spec/sync-operation)))

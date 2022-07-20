@@ -1,242 +1,242 @@
 (ns re-graph.core
   (:require [re-frame.core :as re-frame]
             [re-graph.internals :as internals
-             :refer [interceptors default-instance-name]]
+             :refer [interceptors]]
             [re-graph.logging :as log]
-            [clojure.string :as string]))
+            [clojure.string :as string]
+            [clojure.spec.alpha :as s]
+            [re-graph.spec :as spec]))
+
+;; queries and mutations
 
 (re-frame/reg-event-fx
  ::mutate
- interceptors
- (fn [{:keys [db dispatchable-event instance-name]} [query-id query variables callback-event]]
+ (interceptors ::spec/mutate)
+ (fn [{:keys [db]} {:keys [id query variables callback]
+                    :or {id (internals/generate-id)}
+                    :as event-payload}]
+
    (let [query (str "mutation " (string/replace query #"^mutation\s?" ""))
          websocket-supported? (contains? (get-in db [:ws :supported-operations]) :mutate)]
      (cond
-       (or (get-in db [:http :requests query-id])
-           (get-in db [:subscriptions query-id]))
+       (or (get-in db [:http :requests id])
+           (get-in db [:subscriptions id]))
        {} ;; duplicate in-flight mutation
 
        (and websocket-supported? (get-in db [:ws :ready?]))
-       {:db (assoc-in db [:subscriptions query-id] {:callback callback-event})
+       {:db (assoc-in db [:subscriptions id] {:callback callback})
         ::internals/send-ws [(get-in db [:ws :connection])
-                             {:id query-id
+                             {:id id
                               :type "start"
                               :payload {:query query
                                         :variables variables}}]}
 
        (and websocket-supported? (:ws db))
-       {:db (update-in db [:ws :queue] conj dispatchable-event)}
+       {:db (update-in db [:ws :queue] conj [::mutate event-payload])}
 
        :else
-       {:db (assoc-in db [:http :requests query-id] {:callback callback-event})
-        ::internals/send-http [instance-name
-                               query-id
-                               (get-in db [:http :url])
-                               {:request (get-in db [:http :impl])
-                                :payload {:query query
-                                          :variables variables}}]}))))
+       {:db (assoc-in db [:http :requests id] {:callback callback})
+        ::internals/send-http {:url (get-in db [:http :url])
+                               :request (get-in db [:http :impl])
+                               :payload {:query query
+                                         :variables variables}
+                               :event (assoc event-payload :id id)}}))))
 
 (defn mutate
-  "Execute a GraphQL mutation. The arguments are:
+  "Execute a GraphQL mutation. See ::spec/mutate for the arguments"
+  [opts]
+  (re-frame/dispatch [::mutate (update opts :callback (fn [f] [::internals/callback {:callback-fn f}]))]))
 
-  [instance-name query-string variables callback]
-
-  If the optional `instance-name` is not provided, the default instance is
-  used. The callback function will receive the result of the mutation as its
-  sole argument."
-  [& args]
-  (let [callback-fn (last args)]
-    (re-frame/dispatch (into [::mutate] (conj (vec (butlast args)) [::internals/callback callback-fn])))))
+(s/fdef mutate :args (s/cat :opts ::spec/mutate))
 
 #?(:clj
    (def
-     ^{:doc "Executes a mutation synchronously. The arguments are:
-
-             [instance-name query-string variables timeout]
-
-             The `instance-name` and `timeout` are optional. The `timeout` is
-             specified in milliseconds."}
+     ^{:doc "Executes a mutation synchronously.
+             Options are per `mutate` with an additional optional `:timeout` specified in milliseconds."}
      mutate-sync
      (partial internals/sync-wrapper mutate)))
 
 (re-frame/reg-event-fx
  ::query
- interceptors
- (fn [{:keys [db dispatchable-event instance-name]} [query-id query variables callback-event]]
+ (interceptors ::spec/query)
+ (fn [{:keys [db]} {:keys [id query variables callback legacy?]
+                    :or {id (internals/generate-id)}
+                    :as event-payload}]
+
    (let [query (str "query " (string/replace query #"^query\s?" ""))
          websocket-supported? (contains? (get-in db [:ws :supported-operations]) :query)]
      (cond
-       (or (get-in db [:http :requests query-id])
-           (get-in db [:subscriptions query-id]))
+       (or (get-in db [:http :requests id])
+           (get-in db [:subscriptions id]))
        {} ;; duplicate in-flight query
 
        (and websocket-supported? (get-in db [:ws :ready?]))
-       {:db (assoc-in db [:subscriptions query-id] {:callback callback-event})
+       {:db (assoc-in db [:subscriptions id] {:callback callback
+                                              :legacy? legacy?})
         ::internals/send-ws [(get-in db [:ws :connection])
-                             {:id query-id
+                             {:id id
                               :type "start"
                               :payload {:query query
                                         :variables variables}}]}
 
        (and websocket-supported? (:ws db))
-       {:db (update-in db [:ws :queue] conj dispatchable-event)}
+       {:db (update-in db [:ws :queue] conj [::query event-payload])}
 
        :else
-       {:db (assoc-in db [:http :requests query-id] {:callback callback-event})
-        ::internals/send-http [instance-name
-                               query-id
-                               (get-in db [:http :url])
-                               {:request (get-in db [:http :impl])
-                                :payload {:query query
-                                          :variables variables}}]}))))
+       {:db (assoc-in db [:http :requests id] {:callback callback})
+        ::internals/send-http {:url (get-in db [:http :url])
+                               :request (get-in db [:http :impl])
+                               :payload {:query query
+                                         :variables variables}
+                               :event (assoc event-payload :id id)}}))))
 
 (defn query
-  "Execute a GraphQL query. The arguments are:
+  "Execute a GraphQL query. See ::spec/query for the arguments"
+  [opts]
+  (re-frame/dispatch [::query (update opts :callback (fn [f] [::internals/callback {:callback-fn f}]))]))
 
-  [instance-name query-string variables callback]
-
-  If the optional `instance-name` is not provided, the default instance is
-  used. The callback function will receive the result of the query as its
-  sole argument."
-  [& args]
-  (let [callback-fn (last args)]
-    (re-frame/dispatch (into [::query] (conj (vec (butlast args)) [::internals/callback callback-fn])))))
+(s/fdef query :args (s/cat :opts ::spec/query))
 
 #?(:clj
    (def
-     ^{:doc "Executes a query synchronously. The arguments are:
-
-             [instance-name query-string variables timeout]
-
-             The `instance-name` and `timeout` are optional. The `timeout` is
-             specified in milliseconds."}
+     ^{:doc "Executes a query synchronously.
+             Options are per `query` with an additional optional `:timeout` specified in milliseconds."}
      query-sync
      (partial internals/sync-wrapper query)))
 
 (re-frame/reg-event-fx
  ::abort
- interceptors
- (fn [{:keys [db]} [query-id]]
+ (interceptors ::spec/abort)
+ (fn [{:keys [db]} {:keys [id]}]
    (merge
-     {:db (-> db
-              (update :subscriptions dissoc query-id)
-              (update-in [:http :requests] dissoc query-id))}
-    (when-let [abort-fn (get-in db [:http :requests query-id :abort])]
+    {:db (-> db
+             (update :subscriptions dissoc id)
+             (update-in [:http :requests] dissoc id))}
+    (when-let [abort-fn (get-in db [:http :requests id :abort])]
       {::internals/call-abort abort-fn}) )))
 
 (defn abort
-  ([query-id] (abort default-instance-name query-id))
-  ([instance-name query-id]
-   (re-frame/dispatch [::abort instance-name query-id])))
+  "Abort a pending query or mutation. See ::spec/abort for the arguments"
+  [opts]
+   (re-frame/dispatch [::abort opts]))
+
+(s/fdef abort :args (s/cat :opts ::spec/abort))
+
+;; subscriptions
 
 (re-frame/reg-event-fx
  ::subscribe
- interceptors
- (fn [{:keys [db instance-name dispatchable-event]} [subscription-id query variables callback-event]]
+ (interceptors ::spec/subscribe)
+ (fn [{:keys [db]} {:keys [id query variables callback instance-id legacy?] :as event}]
    (cond
-     (get-in db [:subscriptions (name subscription-id) :active?])
+     (get-in db [:subscriptions (name id) :active?])
      {} ;; duplicate subscription
 
      (get-in db [:ws :ready?])
-     {:db (assoc-in db [:subscriptions (name subscription-id)] {:callback callback-event
-                                                                :event dispatchable-event
-                                                                :active? true})
+     {:db (assoc-in db [:subscriptions (name id)] {:callback callback
+                                                                :event [::subscribe event]
+                                                                :active? true
+                                                                :legacy? legacy?})
       ::internals/send-ws [(get-in db [:ws :connection])
-                           {:id (name subscription-id)
+                           {:id (name id)
                             :type "start"
                             :payload {:query (str "subscription " (string/replace query #"^subscription\s?" ""))
                                       :variables variables}}]}
 
      (:ws db)
-     {:db (update-in db [:ws :queue] conj dispatchable-event)}
+     {:db (update-in db [:ws :queue] conj [::subscribe event])}
 
      :else
      (log/error
        (str
-        "Error creating subscription " subscription-id
-        " on instance " instance-name
+        "Error creating subscription " id
+        " on instance " instance-id
          ": Websocket is not enabled, subscriptions are not possible. Please check your re-graph configuration")))))
 
 (defn subscribe
-  ([subscription-id query variables callback-fn] (subscribe default-instance-name subscription-id query variables callback-fn))
-  ([instance-name subscription-id query variables callback-fn]
-   (re-frame/dispatch [::subscribe instance-name subscription-id query variables [::internals/callback callback-fn]])))
+  "Create a GraphQL subscription. See ::spec/subscribe for the arguments"
+  [opts]
+  (re-frame/dispatch [::subscribe (update opts :callback (fn [f] [::internals/callback {:callback-fn f}]))]))
+
+(s/fdef subscribe :args (s/cat :opts ::spec/subscribe))
 
 (re-frame/reg-event-fx
  ::unsubscribe
- interceptors
- (fn [{:keys [db instance-name]} [subscription-id]]
+ (interceptors ::spec/unsubscribe)
+ (fn [{:keys [db]} {:keys [id] :as event}]
    (if (get-in db [:ws :ready?])
-     {:db (update db :subscriptions dissoc (name subscription-id))
+     {:db (update db :subscriptions dissoc (name id))
       ::internals/send-ws [(get-in db [:ws :connection])
-                           {:id (name subscription-id)
+                           {:id (name id)
                             :type "stop"}]}
 
-     {:db (update-in db [:ws :queue] conj [::unsubscribe instance-name subscription-id])})))
+     {:db (update-in db [:ws :queue] conj [::unsubscribe event])})))
 
 (defn unsubscribe
-  ([subscription-id] (unsubscribe default-instance-name subscription-id))
-  ([instance-name subscription-id]
-   (re-frame/dispatch [::unsubscribe instance-name subscription-id])))
+  "Cancel an existing GraphQL subscription. See ::spec/unsubscribe for the arguments"
+  [opts]
+  (re-frame/dispatch [::unsubscribe opts]))
 
-(re-frame/reg-event-fx
- ::re-init
- [re-frame/trim-v internals/re-graph-instance]
- (fn [{:keys [db instance-name]} [opts]]
-   (let [new-db (internals/deep-merge db opts)]
-     (merge {:db new-db}
-            (when (get-in new-db [:ws :ready?])
-              {:dispatch [::internals/connection-init instance-name]})))))
+(s/fdef unsubscribe :args (s/cat :opts ::spec/unsubscribe))
 
-(defn re-init
-  ([opts] (re-init default-instance-name opts))
-  ([instance-name opts]
-   (re-frame/dispatch [::re-init instance-name opts])))
+;; re-graph lifecycle
 
 (re-frame/reg-event-fx
  ::init
- (fn [{:keys [db]} [_ instance-name opts]]
-   (let [[instance-name opts] (cond
-                                (and (nil? instance-name) (nil? opts))
-                                [default-instance-name {}]
-
-                                (map? instance-name)
-                                [default-instance-name instance-name]
-
-                                (nil? instance-name)
-                                [default-instance-name opts]
-
-                                :else
-                                [instance-name opts])
-         ws-options (internals/ws-options opts)
-         http-options (internals/http-options opts)]
-
+ [re-frame/unwrap (internals/assert-spec ::spec/init)]
+ (fn [{:keys [db]} {:keys [instance-id]
+                    :or {instance-id internals/default-instance-id}
+                    :as opts}]
+   (let [{:keys [ws] :as opts}
+         (merge opts
+                (internals/ws-options opts)
+                (internals/http-options opts))]
      (merge
-      {:db (assoc-in db [:re-graph instance-name]
-                     (merge ws-options http-options))}
-      (when ws-options
-        {::internals/connect-ws [instance-name ws-options]})))))
+      {:db (assoc-in db [:re-graph instance-id] opts)}
+      (when ws
+        {::internals/connect-ws [instance-id ws]})))))
+
+(defn init
+  "Initialise an instance of re-graph. See ::spec/init for the arguments"
+  [opts]
+  (re-frame/dispatch [::init opts]))
+
+(s/fdef init :args (s/cat :opts ::spec/init))
+
+(re-frame/reg-event-fx
+ ::re-init
+ [re-frame/unwrap internals/select-instance (internals/assert-spec ::spec/re-init)]
+ (fn [{:keys [db]} opts]
+   (let [new-db (internals/deep-merge db opts)]
+     (merge {:db new-db}
+            (when (get-in new-db [:ws :ready?])
+              {:dispatch [::internals/connection-init opts]})))))
+
+(defn re-init
+  "Re-initialise an instance of re-graph. See ::spec/re-init for the arguments"
+  [opts]
+  (re-frame/dispatch [::re-init opts]))
+
+(s/fdef re-init :args (s/cat :opts ::spec/re-init))
 
 (re-frame/reg-event-fx
  ::destroy
- interceptors
- (fn [{:keys [db instance-name]} _]
-   (if-let [subscription-ids (not-empty (-> db :subscriptions keys))]
-     {:dispatch-n (for [subscription-id subscription-ids]
-                    [::unsubscribe instance-name subscription-id])
-      :dispatch [::destroy instance-name]}
+ (interceptors ::spec/destroy)
+ (fn [{:keys [db]} {:keys [instance-id]}]
+   (if-let [ids (not-empty (-> db :subscriptions keys))]
+     {:dispatch-n (for [id ids]
+                    [::unsubscribe {:instance-id instance-id
+                                    :id id}])
+      :dispatch [::destroy {:instance-id instance-id}]}
 
      (merge
       {:db (assoc db :destroyed? true)}
       (when-let [ws (get-in db [:ws :connection])]
         {::internals/disconnect-ws [ws]})))))
 
-(defn init
-  ([opts] (init default-instance-name opts))
-  ([instance-name opts]
-   (re-frame/dispatch [::init instance-name opts])))
-
 (defn destroy
-  ([] (destroy default-instance-name))
-  ([instance-name]
-   (re-frame/dispatch [::destroy instance-name])))
+  "Destroy an instance of re-graph. See ::spec/destroy for the arguments"
+  [opts]
+  (re-frame/dispatch [::destroy opts]))
+
+(s/fdef destroy :args (s/cat :opts ::spec/destroy))
