@@ -253,23 +253,26 @@
 
 (defn- on-ws-message [instance-id]
   (fn [m]
-    (let [{:keys [type id payload]} (message->data m)]
-      (condp = type
-        "data"
-        (re-frame/dispatch [::on-ws-data {:instance-id instance-id
-                                          :id id
-                                          :payload payload}])
+    (try
+      (let [{:keys [type id payload]} (message->data m)]
+        (condp = type
+          "data"
+          (re-frame/dispatch [::on-ws-data {:instance-id instance-id
+                                            :id          id
+                                            :payload     payload}])
 
-        "complete"
-        (re-frame/dispatch [::on-ws-complete {:instance-id instance-id
-                                              :id id}])
+          "complete"
+          (re-frame/dispatch [::on-ws-complete {:instance-id instance-id
+                                                :id          id}])
 
-        "error"
-        (re-frame/dispatch [::on-ws-data {:instance-id instance-id
-                                          :id id
-                                          :payload {:errors payload}}])
+          "error"
+          (re-frame/dispatch [::on-ws-data {:instance-id instance-id
+                                            :id          id
+                                            :payload     {:errors payload}}])
 
-        (log/debug "Ignoring graphql-ws event " instance-id " - " type)))))
+          (log/debug "Ignoring graphql-ws event " instance-id " - " type)))
+      (catch #?(:clj Exception :cljs js/Object) e
+        (log/error e "Failed to handle graphql-ws event " instance-id " - " m)))))
 
 (defn- on-open
   ([instance-id]
