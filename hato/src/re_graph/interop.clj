@@ -4,10 +4,17 @@
 
 (defn create-ws [url {:keys [on-message on-error] :as callbacks}]
   (hato-ws/websocket url (assoc callbacks
-                                :on-message (fn [_ws message _last?]
-                                              (on-message (str message)))
-                                :on-error (fn [_ws error]
-                                            (on-error error)))))
+                           ;; See `java.net.http.WebSocket/request` docs for more details on `last?`
+                           :on-message (let [text-buffer (atom (StringBuilder.))]
+                                         (fn [_ws message last?]
+                                           (locking text-buffer
+                                             (let [^StringBuilder sb @text-buffer]
+                                               (.append sb (str message))
+                                               (when last?
+                                                 (on-message (str sb))
+                                                 (reset! text-buffer (StringBuilder.)))))))
+                           :on-error (fn [_ws error]
+                                       (on-error error)))))
 
 (defn send-ws [instance payload]
   (hato-ws/send! instance payload))
