@@ -63,7 +63,10 @@
                     :or {id (internals/generate-id)}
                     :as event-payload}]
 
-   (let [query (str "query " (string/replace query #"^query\s?" ""))
+   ;; prepend `query` if it is omitted (and not a fragment declaration)
+   (let [query (if (re-find #"^(query|fragment)" query)
+                 query
+                 (str "query " query))
          websocket-supported? (contains? (get-in db [:ws :supported-operations]) :query)]
      (cond
        (or (get-in db [:http :requests id])
