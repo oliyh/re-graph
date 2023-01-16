@@ -665,6 +665,30 @@
 (deftest named-http-parameters-test
   (run-http-parameters-test :service-a))
 
+(deftest http-query-with-id-test
+  (let [dispatch (partial dispatch-to-instance nil)]
+    (run-test-sync
+     (let [expected-http-url "http://foo.bar/graph-ql"
+           call-count (atom 0)]
+       (init nil {:http {:url expected-http-url}
+                  :ws   nil})
+       (testing "Request is completed"
+         (re-frame/reg-fx
+          ::internals/send-http
+          (fn [{:keys [request]}]
+            (is request)
+            (swap! call-count inc)))
+         (dispatch [::re-graph/query {:id "query-1"
+                                      :query "{ things { id } }"
+                                      :variables {:some "variable"}
+                                      :callback [::on-thing]}])
+         (dispatch [::re-graph/mutate {:id "mutation-1"
+                                       :query "don't care"
+                                       :variables {:some "variable"}
+                                       :callback [::on-thing]}])
+
+         (is (= 2 @call-count)))))))
+
 (defn- call-instance [instance-id f]
   (fn [opts]
     (f (if instance-id
