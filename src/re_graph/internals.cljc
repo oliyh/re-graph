@@ -247,7 +247,8 @@
                           (assoc-in [:ws :ready?] false)
                           (update :subscriptions deactivate-subscriptions))]
            new-db)}
-    (when-let [reconnect-timeout (get-in db [:ws :reconnect-timeout])]
+    (when-let [reconnect-timeout (and (not (:destroyed? db))
+                                      (get-in db [:ws :reconnect-timeout]))]
       {:dispatch-later [{:ms reconnect-timeout
                          :dispatch [::reconnect-ws {:instance-id instance-id}]}]}))))
 

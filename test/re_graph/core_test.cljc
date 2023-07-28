@@ -136,12 +136,25 @@
 (defn- run-websocket-lifecycle-test [instance-id]
   (let [dispatch (partial dispatch-to-instance instance-id)
         db-instance #(get-in @app-db [:re-graph (or instance-id default-instance-id)])
-        on-open (partial on-open (or instance-id default-instance-id))]
+        on-open (partial on-open (or instance-id default-instance-id))
+        on-close (partial on-close (or instance-id default-instance-id))
+        reconnect-called? (atom false)]
     (run-test-sync
 
      (re-frame/reg-fx
       ::internals/connect-ws
       (constantly nil))
+
+     (re-frame/reg-event-fx
+      ::internals/reconnect-ws
+      (fn [& _args]
+        (reset! reconnect-called? true)
+        {}))
+
+     (re-frame/reg-fx
+      :dispatch-later
+      (fn [[{:keys [dispatch]}]]
+        (re-frame/dispatch dispatch)))
 
      (let [init-payload {:token "abc"}
            expected-subscription-payload {:id "my-sub"
@@ -150,7 +163,8 @@
                                                     :variables {:some "variable"}}}]
 
        (init instance-id {:ws {:url                     "ws://socket.rocket"
-                               :connection-init-payload init-payload}})
+                               :connection-init-payload init-payload
+                               :reconnect-timeout 0}})
 
        (testing "messages are queued when websocket isn't ready"
 
@@ -210,9 +224,13 @@
             (is (= ::websocket-connection ws)))))
 
        (dispatch [::re-graph/destroy {}])
+       ((on-close))
 
        (testing "the re-graph state is set to destroyed"
-         (is (:destroyed? (db-instance))))))))
+         (is (:destroyed? (db-instance))))
+
+       (testing "it does not attempt to reconnect"
+         (is (false? @reconnect-called?)))))))
 
 (deftest websocket-lifecycle-test
   (run-websocket-lifecycle-test nil))
