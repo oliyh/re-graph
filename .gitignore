@@ -13,3 +13,6 @@ pom.xml.asc
 /figwheel_server.log
 /resources/public/js
 /dev-resources/public/*/js
+.idea
+/*.iml
+.cpcache

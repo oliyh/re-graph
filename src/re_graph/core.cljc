@@ -140,11 +140,15 @@
                                                                 :event [::subscribe event]
                                                                 :active? true
                                                                 :legacy? legacy?})
-      ::internals/send-ws [(get-in db [:ws :connection])
-                           {:id (name id)
-                            :type "start"
-                            :payload {:query (str "subscription " (string/replace query #"^subscription\s?" ""))
-                                      :variables variables}}]}
+      ;; subscription-query-as-data? supports subscription query format for AWS AppSync
+      ::internals/send-ws (let [{:keys [create-payload] :or {create-payload identity}} (get db :ws)
+                                query {:query     (str "subscription " (string/replace query #"^subscription\s?" ""))
+                                       :variables variables}
+                                payload (create-payload query)]
+                            [(get-in db [:ws :connection])
+                             {:id      (name id)
+                              :type    "start"
+                              :payload payload}])}
 
      (:ws db)
      {:db (update-in db [:ws :queue] conj [::subscribe event])}
