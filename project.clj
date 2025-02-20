@@ -66,7 +66,10 @@
 
                                          ;; clj-http-gniazdo
                                          [clj-http "3.12.3"]
-                                         [stylefruits/gniazdo "1.2.0"]]
+                                         [stylefruits/gniazdo "1.2.0"]
+                                         
+                                         [cljsjs/react "18.3.1-1"]
+                                         [cljsjs/react-dom "18.3.1-1"]]
                         :repl-options   {:init-ns user}}
              :clj-http-gniazdo {:source-paths ["clj-http-gniazdo/src"]}}
   :aliases {"fig"       ["trampoline" "run" "-m" "figwheel.main"]
