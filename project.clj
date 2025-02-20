@@ -15,14 +15,14 @@
                   ["modules" "change" "version" "leiningen.release/bump-version"]
                   ["vcs" "commit"]
                   ["vcs" "push"]]
-  :dependencies [[re-frame "1.2.0"]
-                 [cljs-http "0.1.46"]
-                 [org.clojure/tools.logging "1.2.4"]
-                 [cheshire "5.10.2"]
-                 [org.clojure/spec.alpha "0.3.218"]
+  :dependencies [[re-frame "1.4.3"]
+                 [cljs-http "0.1.48"]
+                 [org.clojure/tools.logging "1.3.0"]
+                 [cheshire "5.13.0"]
+                 [org.clojure/spec.alpha "0.5.238"]
                  [re-graph.hato :version]]
-  :profiles {:provided {:dependencies [[org.clojure/clojure "1.10.3"]
-                                       [org.clojure/clojurescript "1.11.4"]]}
+  :profiles {:provided {:dependencies [[org.clojure/clojure "1.12.0"]
+                                       [org.clojure/clojurescript "1.11.132"]]}
              :dev      {:source-paths   ["dev"
                                          "hato/src"
                                          ;;"clj-http-gniazdo/src"
