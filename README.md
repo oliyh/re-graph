@@ -32,6 +32,7 @@ Features include:
   - [Cookies](#cookies)
   - [Token in query param](#token-in-query-param)
   - [Basic auth](#basic-auth)
+  - [Subscription protocol](#subscription-protocol)
   - [Sub-protocol hack](#sub-protocol-hack)
 - [Re-initialisation](#re-initialisation)
 - [Development](#development)
@@ -142,7 +143,7 @@ Options can be passed to the init event, with the following possibilities:
 (re-frame/dispatch
   [::re-graph/init
    {:ws {:url                     "wss://foo.io/graphql-ws" ;; override the websocket url (defaults to /graphql-ws, nil to disable)
-         :sub-protocol            "graphql-ws"              ;; override the websocket sub-protocol (defaults to "graphql-ws")
+         :sub-protocol            "graphql-ws"              ;; websocket sub-protocol: "graphql-ws" (legacy, default) or "graphql-transport-ws" (modern)
          :reconnect-timeout       5000                      ;; attempt reconnect n milliseconds after disconnect (defaults to 5000, nil to disable)
          :resume-subscriptions?   true                      ;; start existing subscriptions again when websocket is reconnected after a disconnect (defaults to true)
          :connection-init-payload {}                        ;; the payload to send in the connection_init message, sent when a websocket connection is made (defaults to {})
@@ -214,6 +215,7 @@ There are several methods of authenticating with the server, with various trade-
 - [Cookies](#cookies)
 - [Token in query param](#token-in-query-param)
 - [Basic auth](#basic-auth)
+- [Subscription protocol](#subscription-protocol)
 - [Sub-protocol hack](#sub-protocol-hack)
 
 ### Headers
@@ -298,6 +300,22 @@ You can put basic auth in the http and websocket urls and use it to authenticate
     {:http {:url "https://my-user:my-password@my-server.com/graphql"}
      :ws {:url "wss://my-user:my-password@my-server.com/graphql-ws"}}])
 ```
+
+### Subscription protocol
+
+re-graph supports two websocket sub-protocols, selected with `:sub-protocol`:
+
+- `"graphql-ws"` (the default) - the legacy [subscriptions-transport-ws](https://github.com/apollographql/subscriptions-transport-ws) protocol.
+- `"graphql-transport-ws"` - the modern [graphql-ws](https://github.com/enisdenjo/graphql-ws) protocol, used by Apollo Server 3+, graphql-yoga, Hasura and AWS AppSync.
+
+```clojure
+(re-frame/dispatch
+  [::re-graph/init
+    {:ws {:url "wss://foo.io/graphql"
+          :sub-protocol "graphql-transport-ws"}}])
+```
+
+Under `graphql-transport-ws`, re-graph waits for the server's `connection_ack` before sending any operations and answers server `ping` messages with `pong`, as the protocol requires. The default remains the legacy protocol, so existing configurations are unaffected.
 
 ### Sub-protocol hack
 
