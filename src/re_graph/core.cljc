@@ -27,7 +27,7 @@
        {:db (assoc-in db [:subscriptions id] {:callback callback})
         ::internals/send-ws [(get-in db [:ws :connection])
                              {:id id
-                              :type "start"
+                              :type (internals/ws-message-type db :subscribe)
                               :payload {:query query
                                         :variables variables}}]}
 
@@ -78,7 +78,7 @@
                                               :legacy? legacy?})
         ::internals/send-ws [(get-in db [:ws :connection])
                              {:id id
-                              :type "start"
+                              :type (internals/ws-message-type db :subscribe)
                               :payload {:query query
                                         :variables variables}}]}
 
@@ -142,7 +142,7 @@
                                                                 :legacy? legacy?})
       ::internals/send-ws [(get-in db [:ws :connection])
                            {:id (name id)
-                            :type "start"
+                            :type (internals/ws-message-type db :subscribe)
                             :payload {:query (str "subscription " (string/replace query #"^subscription\s?" ""))
                                       :variables variables}}]}
 
@@ -171,7 +171,7 @@
      {:db (update db :subscriptions dissoc (name id))
       ::internals/send-ws [(get-in db [:ws :connection])
                            {:id (name id)
-                            :type "stop"}]}
+                            :type (internals/ws-message-type db :complete)}]}
 
      {:db (update-in db [:ws :queue] conj [::unsubscribe event])})))
 

@@ -133,6 +133,61 @@
 (deftest named-subscription-test
   (run-subscription-test :service-a))
 
+(defn- run-transport-ws-subscription-test [instance-id]
+  (let [dispatch (partial dispatch-to-instance instance-id)
+        on-ws-message (on-ws-message (or instance-id default-instance-id))
+        sent (atom [])]
+    (run-test-sync
+     (install-websocket-stub!)
+     (re-frame/reg-fx ::internals/send-ws (fn [[_ws payload]] (swap! sent conj payload)))
+     (init instance-id {:ws {:url "ws://socket.rocket"
+                             :sub-protocol "graphql-transport-ws"
+                             :connection-init-payload nil}})
+
+     (testing "connection_init is sent on open"
+       (is (= [{:type "connection_init"}] @sent)))
+
+     (testing "subscriptions wait for connection_ack, then send as 'subscribe'"
+       (dispatch [::re-graph/subscribe {:id :my-sub
+                                        :query "{ things { id } }"
+                                        :variables {:some "variable"}
+                                        :callback [::on-thing]}])
+       ;; not acked yet: still only the connection_init message
+       (is (= 1 (count @sent)))
+
+       (on-ws-message (data->message {:type "connection_ack"}))
+
+       (is (= {:id "my-sub"
+               :type "subscribe"
+               :payload {:query "subscription { things { id } }"
+                         :variables {:some "variable"}}}
+              (last @sent))))
+
+     (testing "'next' messages are sent to the callback"
+       (let [expected {:data {:things [{:id 1} {:id 2}]}}]
+         (re-frame/reg-event-db
+          ::on-thing
+          [re-frame/unwrap]
+          (fn [db {:keys [response]}] (assoc db ::thing response)))
+         (on-ws-message (data->message {:type "next" :id "my-sub" :payload expected}))
+         (is (= expected (::thing @app-db)))))
+
+     (testing "'ping' is answered with 'pong'"
+       (reset! sent [])
+       (on-ws-message (data->message {:type "ping"}))
+       (is (= [{:type "pong"}] @sent)))
+
+     (testing "unsubscribe sends 'complete'"
+       (reset! sent [])
+       (dispatch [::re-graph/unsubscribe {:id :my-sub}])
+       (is (= {:id "my-sub" :type "complete"} (last @sent)))))))
+
+(deftest transport-ws-subscription-test
+  (run-transport-ws-subscription-test nil))
+
+(deftest named-transport-ws-subscription-test
+  (run-transport-ws-subscription-test :service-a))
+
 (defn- run-websocket-lifecycle-test [instance-id]
   (let [dispatch (partial dispatch-to-instance instance-id)
         db-instance #(get-in @app-db [:re-graph (or instance-id default-instance-id)])

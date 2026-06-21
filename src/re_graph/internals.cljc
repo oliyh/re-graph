@@ -29,6 +29,28 @@
                (js->clj :keywordize-keys true))
      :clj (json/decode m keyword)))
 
+;; Two websocket sub-protocols are supported, selected by the :sub-protocol
+;; option: the legacy "graphql-ws" (apollographql/subscriptions-transport-ws)
+;; and the modern "graphql-transport-ws" (the graphql-ws spec by enisdenjo).
+;; They share connection_init/connection_ack but differ in the operation
+;; message names, so outgoing messages look up their wire type here.
+(def ^:private ws-protocol-messages
+  {"graphql-ws"           {:subscribe "start", :complete "stop"}
+   "graphql-transport-ws" {:subscribe "subscribe", :complete "complete"}})
+
+(defn transport-ws?
+  "True if this instance is configured for the modern graphql-transport-ws
+  sub-protocol (which requires waiting for connection_ack before subscribing)."
+  [db]
+  (= "graphql-transport-ws" (get-in db [:ws :sub-protocol])))
+
+(defn ws-message-type
+  "Wire message type for a logical operation (:subscribe / :complete) under the
+  sub-protocol configured for this instance, defaulting to the legacy names."
+  [db op]
+  (or (get-in ws-protocol-messages [(get-in db [:ws :sub-protocol]) op])
+      (get-in ws-protocol-messages ["graphql-ws" op])))
+
 (defn generate-id []
   #?(:cljs (.substr (.toString (Math/random) 36) 2 8)
      :clj (str (UUID/randomUUID))))
@@ -210,27 +232,50 @@
  (fn [{:keys [db]} _]
     (let [ws (get-in db [:ws :connection])
           payload (get-in db [:ws :connection-init-payload])]
-      (when payload
-        {::send-ws [ws {:type "connection_init"
-                        :payload payload}]}))))
+      ;; graphql-transport-ws requires connection_init to be sent always (the
+      ;; server replies connection_ack); legacy only sends it with a payload.
+      (when (or (transport-ws? db) payload)
+        {::send-ws [ws (cond-> {:type "connection_init"}
+                         payload (assoc :payload payload))]}))))
+
+(defn- resume-dispatches
+  "Events to (re)send once the connection is usable: resumed subscriptions plus
+  anything queued while the socket was down."
+  [db]
+  (let [resume? (get-in db [:ws :resume-subscriptions?])
+        subscriptions (when resume? (->> db :subscriptions vals (map :event)))
+        queue (get-in db [:ws :queue])]
+    (vec (concat subscriptions queue))))
 
 (re-frame/reg-event-fx
  ::on-ws-open
  (interceptors)
  (fn [{:keys [db]} {:keys [instance-id websocket]}]
-   (merge
-    {:db (update db :ws
-                    assoc
-                    :connection websocket
-                    :ready? true
-                    :queue [])}
-    (let [resume? (get-in db [:ws :resume-subscriptions?])
-          subscriptions (when resume? (->> db :subscriptions vals (map :event)))
-          queue (get-in db [:ws :queue])
-          to-send (concat [[::connection-init {:instance-id instance-id}]]
-                          subscriptions
-                          queue)]
-      {:dispatch-n (vec to-send)}))))
+   (if (transport-ws? db)
+     ;; modern: register the connection and send connection_init, but stay
+     ;; not-ready (queuing operations) until the server sends connection_ack.
+     {:db (assoc-in db [:ws :connection] websocket)
+      :dispatch [::connection-init {:instance-id instance-id}]}
+     ;; legacy: ready immediately, send connection_init then flush.
+     (merge
+      {:db (update db :ws assoc :connection websocket :ready? true :queue [])}
+      {:dispatch-n (into [[::connection-init {:instance-id instance-id}]]
+                         (resume-dispatches db))}))))
+
+(re-frame/reg-event-fx
+ ::on-ws-ack
+ (interceptors)
+ (fn [{:keys [db]} _]
+   ;; graphql-transport-ws: connection is usable now - go ready and flush.
+   (when (transport-ws? db)
+     {:db (update db :ws assoc :ready? true :queue [])
+      :dispatch-n (resume-dispatches db)})))
+
+(re-frame/reg-event-fx
+ ::on-ws-ping
+ (interceptors)
+ (fn [{:keys [db]} _]
+   {::send-ws [(get-in db [:ws :connection]) {:type "pong"}]}))
 
 (defn- deactivate-subscriptions [subscriptions]
   (reduce-kv (fn [subs sub-id sub]
@@ -256,21 +301,32 @@
   (fn [m]
     (try
       (let [{:keys [type id payload]} (message->data m)]
-        (condp = type
-          "data"
+        (cond
+          ;; "data" (legacy) and "next" (graphql-transport-ws) carry results
+          (contains? #{"data" "next"} type)
           (re-frame/dispatch [::on-ws-data {:instance-id instance-id
                                             :id          id
                                             :payload     payload}])
 
-          "complete"
+          (= "complete" type)
           (re-frame/dispatch [::on-ws-complete {:instance-id instance-id
                                                 :id          id}])
 
-          "error"
+          (= "error" type)
           (re-frame/dispatch [::on-ws-data {:instance-id instance-id
                                             :id          id
                                             :payload     {:errors payload}}])
 
+          ;; graphql-transport-ws: subscriptions may only be sent after ack
+          (= "connection_ack" type)
+          (re-frame/dispatch [::on-ws-ack {:instance-id instance-id}])
+
+          ;; graphql-transport-ws keepalive - reply to keep the socket open
+          (= "ping" type)
+          (re-frame/dispatch [::on-ws-ping {:instance-id instance-id}])
+
+          ;; ignore "ka" (legacy keepalive), "pong", and anything unknown
+          :else
           (log/debug "Ignoring graphql-ws event " instance-id " - " type)))
       (catch #?(:clj Exception :cljs js/Object) e
         (log/error e "Failed to handle graphql-ws event " instance-id " - " m)))))
