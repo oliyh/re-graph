@@ -17,11 +17,14 @@
                   ["vcs" "push"]]
   :dependencies [[re-frame "1.2.0"]
                  [cljs-http "0.1.46"]
-                 [org.clojure/tools.logging "1.2.4"]
-                 [cheshire "5.10.2"]
-                 [org.clojure/spec.alpha "0.3.218"]
+                 [org.clojure/tools.logging "1.3.0"]
+                 [cheshire "5.13.0"]
+                 [org.clojure/spec.alpha "0.5.238"]
                  [re-graph.hato :version]]
-  :profiles {:provided {:dependencies [[org.clojure/clojure "1.10.3"]
+  ;; re-frame stays at 1.2.0 here: 1.4's reagent/React decoupling and dispatch
+  ;; changes need accompanying code fixes, so that upgrade is a separate PR.
+  ;; ClojureScript stays at 1.11.4 (1.12 needs JDK 21; CI is JDK 11).
+  :profiles {:provided {:dependencies [[org.clojure/clojure "1.11.4"]
                                        [org.clojure/clojurescript "1.11.4"]]}
              :dev      {:source-paths   ["dev"
                                          "hato/src"
