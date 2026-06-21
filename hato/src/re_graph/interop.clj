@@ -2,8 +2,17 @@
   (:require [hato.client :as hato-http]
             [hato.websocket :as hato-ws]))
 
+;; Reuse a single HttpClient across requests. java.net.http.HttpClient owns an
+;; executor, and on JDK 21+ an unreferenced client can be closed (shutting down
+;; that executor) before an in-flight async callback runs, yielding a
+;; RejectedExecutionException. A long-lived client keeps the executor alive and
+;; also reuses the connection pool.
+(defonce ^:private http-client
+  (hato-http/build-http-client {:connect-timeout 10000}))
+
 (defn create-ws [url {:keys [on-message on-error] :as callbacks}]
   (hato-ws/websocket url (assoc callbacks
+                           :http-client http-client
                            ;; See `java.net.http.WebSocket/request` docs for more details on `last?`
                            :on-message (let [text-buffer (atom (StringBuilder.))]
                                          (fn [_ws message last?]
@@ -28,6 +37,7 @@
                       (update :headers merge {"Content-Type" "application/json"
                                               "Accept" "application/json"})
                       (merge {:body payload
+                              :http-client http-client
                               :as :json
                               :coerce :always
                               :async? true
