@@ -47,13 +47,16 @@
       (assoc ::server/allowed-origins {:creds true
                                        :allowed-origins (constantly true)})))
 
-(def runnable-service (server/create-server service))
+(defonce ^:private server-instance (atom nil))
 
 (defn start! []
-  (server/start runnable-service))
+  (reset! server-instance (server/create-server service))
+  (server/start @server-instance))
 
 (defn stop! []
-  (server/stop runnable-service))
+  (when-let [s @server-instance]
+    (server/stop s)
+    (reset! server-instance nil)))
 
 (defn with-server [f]
   (start!)
