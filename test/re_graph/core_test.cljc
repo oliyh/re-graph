@@ -466,8 +466,8 @@
            (re-frame/reg-event-db
             ::on-thing
             [re-frame/unwrap]
-            (fn [db {:keys [response]} callback-arg]
-              (assoc db ::thing response ::callback-arg callback-arg)))
+            (fn [db {:keys [response]}]
+              (assoc db ::thing response)))
 
            (dispatch [::re-graph/query {:query "{ things { id } }"
                                         :variables {:some "variable"}
@@ -475,20 +475,7 @@
 
            (testing "responses are sent to the callback"
              (is (= expected-response-payload
-                    (::thing @app-db))))
-
-           (testing "with an id"
-
-             (dispatch [::re-graph/query {:id :some-id
-                                          :query "{ things { id } }"
-                                          :variables {:some "variable"}
-                                          :callback [::on-thing ::ensuring-query-with-id-works]}])
-
-             (testing "responses are sent to the callback"
-               (is (= expected-response-payload
-                      (::thing @app-db)))
-               (is (= ::ensuring-query-works-with-id
-                      (::callback-arg @app-db))))))
+                    (::thing @app-db)))))
 
          (testing "In flight queries are deduplicated"
            (let [id :abc-123]
