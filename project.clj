@@ -1,4 +1,4 @@
-(defproject re-graph "0.2.3"
+(defproject re-graph "0.2.4-SNAPSHOT"
   :memoize-middleware? false
   :description "GraphQL client for re-frame applications"
   :url "https://github.com/oliyh/re-graph"

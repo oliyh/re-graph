@@ -1,4 +1,4 @@
-(defproject re-graph.clj-http-gniazdo "0.2.3"
+(defproject re-graph.clj-http-gniazdo "0.2.4-SNAPSHOT"
   :dependencies [[clj-http "3.12.3"]
                  [stylefruits/gniazdo "1.2.0"]]
   :license {:name "Eclipse Public License"
